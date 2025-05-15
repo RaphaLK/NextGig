@@ -1,2 +1,0 @@
-/home/raphael/Desktop/SMAR/NextGig/build/CMakeFiles/edit_cache.dir
-/home/raphael/Desktop/SMAR/NextGig/build/CMakeFiles/rebuild_cache.dir
