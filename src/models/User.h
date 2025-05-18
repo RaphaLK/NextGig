@@ -30,7 +30,7 @@ public:
                                             description(_description),
                                             tags(_tags),
                                             education(_education),
-                                            accomplishments(_accomplishments)
+                                            accomplishments(_accomplishments),
                                             jobHistory(_jobHistory) {}
     ~User();
     string getName() { return name; };
