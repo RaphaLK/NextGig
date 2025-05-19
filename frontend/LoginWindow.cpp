@@ -21,6 +21,7 @@ QWidget *LoginWindow::RenderLoginWindow()
 
   QLabel *title = new QLabel("Welcome Back!", loginWindow);
   QFont titleFont;
+  
   titleFont.setPointSize(15);
   title->setFont(titleFont);
 
