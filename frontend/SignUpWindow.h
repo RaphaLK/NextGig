@@ -8,4 +8,6 @@ class SignUpWindow : public QWidget {
 public:
   explicit SignUpWindow(QWidget *parent = nullptr);
   QWidget* RenderSignUpWindow();
+signals:
+  void returnToHomeRequested();
 };

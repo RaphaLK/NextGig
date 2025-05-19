@@ -8,4 +8,6 @@ class LoginWindow : public QWidget {
 public:
   explicit LoginWindow(QWidget *parent = nullptr);
   QWidget* RenderLoginWindow();
+signals:
+  void returnToHomeRequested();
 };

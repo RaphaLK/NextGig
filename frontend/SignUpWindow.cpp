@@ -2,6 +2,7 @@
 #include <QLabel>
 #include <QVBoxLayout>
 #include <QHBoxLayout>
+#include <QPushButton>
 
 SignUpWindow::SignUpWindow(QWidget *parent) : QWidget(parent)
 {
@@ -20,6 +21,14 @@ QWidget* SignUpWindow::RenderSignUpWindow()
 	QFont titleFont;
 	titleFont.setPointSize(15);
 	title->setFont(titleFont);
+
+	QPushButton* backButton = new QPushButton("Back", signUpWindow);
+
+	connect(backButton, &QPushButton::clicked, [this]() {
+    emit returnToHomeRequested();  
+  });
 	
+	layout->addWidget(backButton);
+	layout->addWidget(title);
 	return signUpWindow;
 }
