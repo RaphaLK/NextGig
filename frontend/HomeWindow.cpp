@@ -20,6 +20,11 @@ HomeWindow::HomeWindow(QWidget *parent) : QWidget(parent)
 	stack->addWidget(loginPage);  // Index 1
 	stack->addWidget(signupPage); // Index 2
 
+	connect(loginPage, &LoginWindow::returnToHomeRequested, [this]()
+			{ stack->setCurrentIndex(0); });
+
+	connect(signupPage, &SignUpWindow::returnToHomeRequested, [this]()
+			{ stack->setCurrentIndex(0); });
 	// Set the stack as the main layout
 	QVBoxLayout *mainLayout = new QVBoxLayout(this);
 	mainLayout->addWidget(stack);
@@ -30,7 +35,6 @@ QWidget *HomeWindow::RenderHomePage()
 {
 	QWidget *homePage = new QWidget();
 	QVBoxLayout *layout = new QVBoxLayout(homePage);
-
 	// Title
 	QLabel *title = new QLabel("NextGig", homePage);
 	QFont titleFont;
@@ -66,6 +70,7 @@ QWidget *HomeWindow::RenderHomePage()
 			{
 				stack->setCurrentIndex(1); // Go to login
 			});
+
 	connect(signupBtn, &QPushButton::clicked, [this]()
 			{
 				stack->setCurrentIndex(2); // Go to signup
