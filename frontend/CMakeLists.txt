@@ -9,8 +9,10 @@ find_package(Qt5 COMPONENTS Widgets REQUIRED)
 
 add_executable(NextGigFrontend
     main.cpp
+    HomeWindow.cpp
     LoginWindow.cpp
     JobFeed.cpp
+    SignUpWindow.cpp
 )
 
 target_link_libraries(NextGigFrontend PRIVATE Qt5::Widgets)
