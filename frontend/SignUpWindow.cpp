@@ -31,10 +31,15 @@ QWidget* SignUpWindow::RenderSignUpWindow()
   emailInput->setPlaceholderText("Enter your email");
   emailInput->setStyleSheet("padding: 8px; font-size: 14px;");
 
-	QLabel *confirmEmailLabel = new QLabel("Confirm Email:", signUpWindow);
-	QLineEdit *confirmEmailInput = new QLineEdit(signUpWindow);
-  confirmEmailInput->setPlaceholderText("Re-type your email");
-  confirmEmailInput->setStyleSheet("padding: 8px; font-size: 14px;");
+	// QLabel *confirmEmailLabel = new QLabel("Confirm Email:", signUpWindow);
+	// QLineEdit *confirmEmailInput = new QLineEdit(signUpWindow);
+  // confirmEmailInput->setPlaceholderText("Re-type your email");
+  // confirmEmailInput->setStyleSheet("padding: 8px; font-size: 14px;");
+
+	QLabel *usernameLabel = new QLabel("Username:", signUpWindow);
+	QLineEdit *usernameInput = new QLineEdit(signUpWindow);
+  usernameInput->setPlaceholderText("Select a username");
+  usernameInput->setStyleSheet("padding: 8px; font-size: 14px;");
 
   QLabel* passwordLabel = new QLabel("Password:", signUpWindow);
   QLineEdit* passwordInput = new QLineEdit(signUpWindow);
@@ -68,8 +73,12 @@ QWidget* SignUpWindow::RenderSignUpWindow()
   layout->addWidget(emailInput);
   layout->addSpacing(15);
 
-  layout->addWidget(confirmEmailLabel);
-  layout->addWidget(confirmEmailInput);
+  // layout->addWidget(confirmEmailLabel);
+  // layout->addWidget(confirmEmailInput);
+  // layout->addSpacing(15);
+
+  layout->addWidget(usernameLabel);
+  layout->addWidget(usernameInput);
   layout->addSpacing(15);
 
   layout->addWidget(passwordLabel);
