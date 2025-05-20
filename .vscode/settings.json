@@ -2,6 +2,7 @@
   "files.associations": {
     "*.ejs": "html",
     "string": "cpp",
-    "qapplication": "cpp"
+    "qapplication": "cpp",
+    "qspaceritem": "cpp"
   }
 }

@@ -10,4 +10,5 @@ public:
   QWidget* RenderLoginWindow();
 signals:
   void returnToHomeRequested();
+  void hiringManagerLoginSuccess();
 };

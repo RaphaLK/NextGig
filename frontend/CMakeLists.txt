@@ -13,6 +13,7 @@ add_executable(NextGigFrontend
     LoginWindow.cpp
     JobFeed.cpp
     SignUpWindow.cpp
+    HiringManagerPortal.cpp
 )
 
 target_link_libraries(NextGigFrontend PRIVATE Qt5::Widgets)

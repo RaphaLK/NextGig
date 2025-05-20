@@ -6,5 +6,6 @@ class HomeWindow : public QWidget {
   QStackedWidget *stack;
 public:
   explicit HomeWindow(QWidget *parent = nullptr);
+  void setupNavigationStack();
   QWidget* RenderHomePage();
 };

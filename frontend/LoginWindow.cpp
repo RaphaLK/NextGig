@@ -39,7 +39,11 @@ QWidget *LoginWindow::RenderLoginWindow()
   passwordInput->setStyleSheet("padding: 8px; font-size: 14px;");
 
   QPushButton *loginButton_Freelancer = new QPushButton("Login (Freelance)", loginWindow);
+  
   QPushButton *loginButton_HiringManager = new QPushButton("Login (Hiring Manager)", loginWindow);
+  connect(loginButton_HiringManager, &QPushButton::clicked, [this]() {
+    emit hiringManagerLoginSuccess();
+  });
 
   QString buttonStyle = "QPushButton { padding: 10px; font-size: 14px; }";
   loginButton_Freelancer->setStyleSheet(buttonStyle);
