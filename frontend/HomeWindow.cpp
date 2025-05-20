@@ -1,6 +1,7 @@
 #include "HomeWindow.h"
 #include "LoginWindow.h"
 #include "SignUpWindow.h"
+#include "HiringManagerPortal.h"
 #include <QLabel>
 #include <QPushButton>
 #include <QVBoxLayout>
@@ -10,25 +11,37 @@ HomeWindow::HomeWindow(QWidget *parent) : QWidget(parent)
 {
 	stack = new QStackedWidget(this);
 
-	// Create pages
-	QWidget *homePage = RenderHomePage();
-	LoginWindow *loginPage = new LoginWindow();
-	SignUpWindow *signupPage = new SignUpWindow();
-
-	// Add pages to stack
-	stack->addWidget(homePage);	  // Index 0
-	stack->addWidget(loginPage);  // Index 1
-	stack->addWidget(signupPage); // Index 2
-
-	connect(loginPage, &LoginWindow::returnToHomeRequested, [this]()
-			{ stack->setCurrentIndex(0); });
-
-	connect(signupPage, &SignUpWindow::returnToHomeRequested, [this]()
-			{ stack->setCurrentIndex(0); });
+	setupNavigationStack();
 	// Set the stack as the main layout
 	QVBoxLayout *mainLayout = new QVBoxLayout(this);
 	mainLayout->addWidget(stack);
 	setLayout(mainLayout);
+}
+
+void HomeWindow::setupNavigationStack()
+{
+	// Create page objects here
+	QWidget *homePage = RenderHomePage();
+	LoginWindow *loginPage = new LoginWindow();
+	SignUpWindow *signupPage = new SignUpWindow();
+	HiringManagerPortal *h_managerPortal = new HiringManagerPortal;
+
+	// Add objects to navigation stack -- indexes are as shown:
+	stack->addWidget(homePage);		// Index 0
+	stack->addWidget(loginPage);	// Index 1
+	stack->addWidget(signupPage); // Index 2
+	stack->addWidget(h_managerPortal);
+	
+	// add signals here
+	connect(loginPage, &LoginWindow::returnToHomeRequested, [this]()
+					{ stack->setCurrentIndex(0); });
+
+	connect(loginPage, &LoginWindow::hiringManagerLoginSuccess, [this]()
+					{ stack->setCurrentIndex(3); });
+
+	connect(signupPage, &SignUpWindow::returnToHomeRequested, [this]()
+					{ stack->setCurrentIndex(0); });
+
 }
 
 QWidget *HomeWindow::RenderHomePage()
@@ -67,14 +80,14 @@ QWidget *HomeWindow::RenderHomePage()
 
 	// Connect buttons to switch pages
 	connect(loginBtn, &QPushButton::clicked, [this]()
-			{
-				stack->setCurrentIndex(1); // Go to login
-			});
+					{
+						stack->setCurrentIndex(1); // Go to login
+					});
 
 	connect(signupBtn, &QPushButton::clicked, [this]()
-			{
-				stack->setCurrentIndex(2); // Go to signup
-			});
+					{
+						stack->setCurrentIndex(2); // Go to signup
+					});
 
 	return homePage;
 }
