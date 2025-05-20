@@ -4,6 +4,7 @@
 #include <QHBoxLayout>
 #include <QPushButton>
 #include <QLineEdit>
+#include <QComboBox>
 
 SignUpWindow::SignUpWindow(QWidget *parent) : QWidget(parent)
 {
@@ -35,12 +36,19 @@ QWidget* SignUpWindow::RenderSignUpWindow()
   confirmEmailInput->setPlaceholderText("Re-type your email");
   confirmEmailInput->setStyleSheet("padding: 8px; font-size: 14px;");
 
-	  QLabel* passwordLabel = new QLabel("Password:", signUpWindow);
+  QLabel* passwordLabel = new QLabel("Password:", signUpWindow);
   QLineEdit* passwordInput = new QLineEdit(signUpWindow);
   passwordInput->setPlaceholderText("Enter your password");
   passwordInput->setEchoMode(QLineEdit::Password);
   passwordInput->setStyleSheet("padding: 8px; font-size: 14px;");
 
+  // Select type of account
+  QLabel *accountType = new QLabel("Account Type:", signUpWindow);
+  QComboBox *accountTypeSelect = new QComboBox(signUpWindow);
+  accountTypeSelect->setPlaceholderText("Please select an account type");
+  accountTypeSelect->addItem("Hiring Manager");
+  accountTypeSelect->addItem("Freelancer");
+  
   QPushButton *createAccount = new QPushButton("Create Account", signUpWindow);
   QString buttonStyle = "QPushButton { padding: 10px; font-size: 14px; }";
 	createAccount->setStyleSheet(buttonStyle);
@@ -66,6 +74,10 @@ QWidget* SignUpWindow::RenderSignUpWindow()
 
   layout->addWidget(passwordLabel);
   layout->addWidget(passwordInput);
+  layout->addSpacing(15);
+
+  layout->addWidget(accountType);
+  layout->addWidget(accountTypeSelect);
   layout->addSpacing(30);
 
 	QHBoxLayout *buttonLayout = new QHBoxLayout();
