@@ -45,7 +45,9 @@ QWidget* HiringManagerPortal::renderHiringManagerPortal(){
     // Logout button
     QPushButton *logoutBtn = new QPushButton("Logout", h_managerPortal);
     logoutBtn->setStyleSheet("padding: 8px; font-size: 13px; color: #fff; background: #d9534f;");
-
+    connect(logoutBtn, &QPushButton::clicked, [this](){
+        emit returnToHomeRequested();
+    });
     // Messages
     QPushButton *messagesBtn = new QPushButton ("Inbox", h_managerPortal);
     messagesBtn->setStyleSheet(buttonStyle);

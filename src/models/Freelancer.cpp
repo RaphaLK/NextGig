@@ -7,5 +7,4 @@ using namespace std;
  {
     string name;
     string description;
-    
  }

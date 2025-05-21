@@ -42,6 +42,9 @@ void HomeWindow::setupNavigationStack()
 	connect(signupPage, &SignUpWindow::returnToHomeRequested, [this]()
 					{ stack->setCurrentIndex(0); });
 
+	connect(h_managerPortal, &HiringManagerPortal::returnToHomeRequested, [this]()
+					{ stack->setCurrentIndex(0); });
+
 }
 
 QWidget *HomeWindow::RenderHomePage()
