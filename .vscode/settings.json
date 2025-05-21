@@ -3,6 +3,8 @@
     "*.ejs": "html",
     "string": "cpp",
     "qapplication": "cpp",
-    "qspaceritem": "cpp"
+    "qspaceritem": "cpp",
+    "iostream": "cpp",
+    "fstream": "cpp"
   }
 }

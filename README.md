@@ -13,3 +13,5 @@ ninja
 - Firebase SDK 
 - CMake
 - Ninja
+### LINUX
+sudo apt-get install libsecret-1-dev libglib2.0-dev
