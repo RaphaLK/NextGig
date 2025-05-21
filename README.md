@@ -6,3 +6,10 @@ cd build
 cmake ..
 ninja
 ./frontend/NextGigFrontend
+
+## Requirements
+- Qt5
+- Qt5Widgets
+- Firebase SDK 
+- CMake
+- Ninja

@@ -6,8 +6,8 @@ set(CMAKE_AUTORCC ON)
 set(CMAKE_AUTOUIC ON)
 
 # Firebase SDK paths
-link_directories(${CMAKE_SOURCE_DIR}/../firebase_cpp_sdk/libs/linux/x86_64)
-include_directories(${CMAKE_SOURCE_DIR}/../firebase_cpp_sdk/include)
+link_directories(${CMAKE_SOURCE_DIR}/firebase_cpp_sdk/libs/linux/x86_64)
+include_directories(${CMAKE_SOURCE_DIR}/firebase_cpp_sdk/include)
 
 add_executable(NextGigBackend
     main.cpp

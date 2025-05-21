@@ -7,6 +7,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 find_package(Qt5 REQUIRED COMPONENTS Widgets)
 add_subdirectory(frontend)
+add_subdirectory(backend)
 
 add_executable(NextGig
     main.cpp

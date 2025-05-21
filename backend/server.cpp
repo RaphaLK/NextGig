@@ -1,13 +1,19 @@
 // filepath: /home/raphael/Desktop/SMAR/NextGig/backend/server.cpp
 #include "server.h"
-#include <firebase/app.h>
-#include <firebase/auth.h>
-#include <firebase/database.h>
 #include <iostream>
+#include <cstdlib>
 
 Server::Server() {
+    firebase::AppOptions options;
+    options.set_api_key("YOUR_API_KEY");
+    // options.set_database_url("YOUR_DATABASE_URL");
+    options.set_project_id("YOUR_PROJECT_ID");
+    options.set_storage_bucket("YOUR_STORAGE_BUCKET");
+    // options.set_messaging_sender_id("YOUR_MESSAGING_SENDER_ID");
+    options.set_app_id("YOUR_APP_ID");
+
     // Initialize Firebase App
-    firebase::App* app = firebase::App::Create();
+    firebase::App* app = firebase::App::Create(options);
     if (!app) {
         std::cerr << "Failed to initialize Firebase App." << std::endl;
         return;
@@ -20,26 +26,14 @@ Server::Server() {
         return;
     }
 
-    // Initialize Firebase Database
-    database = firebase::database::Database::GetInstance(app);
-    if (!database) {
-        std::cerr << "Failed to initialize Firebase Database." << std::endl;
-        return;
-    }
 
     std::cout << "Firebase initialized successfully." << std::endl;
 }
 
 void Server::signIn(const std::string& email, const std::string& password) {
-    auto result = auth->SignInWithEmailAndPassword(email.c_str(), password.c_str());
-    if (result.error() != firebase::auth::kAuthErrorNone) {
-        std::cerr << "Sign-in failed: " << result.error_message() << std::endl;
-    } else {
-        std::cout << "Sign-in successful for user: " << result.user()->email() << std::endl;
-    }
+
 }
 
 void Server::writeData(const std::string& path, const std::string& value) {
-    firebase::database::DatabaseReference ref = database->GetReference(path.c_str());
-    ref.SetValue(value.c_str());
+
 }
