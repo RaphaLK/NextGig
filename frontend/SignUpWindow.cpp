@@ -1,6 +1,5 @@
 #include "SignUpWindow.h"
 #include <iostream>
-#include "../backend/server.h"
 #include <QLabel>
 #include <QVBoxLayout>
 #include <QHBoxLayout>
@@ -70,30 +69,48 @@ QWidget *SignUpWindow::RenderSignUpWindow()
         return;
     }
     
-    // Call backend to register user
-    Server server;
-    firebase::auth::User* user = server.registerUser(
+    // Disable the button to prevent multiple clicks
+    createAccount->setEnabled(false);
+    createAccount->setText("Creating account...");
+    
+    // Call backend to register user - store the server instance as a member variable 
+    // to prevent it from being destroyed before callback completes
+    server = new Server();  // Add server as member variable in SignUpWindow class
+    server->registerUser(
         email.toStdString(), 
         password.toStdString(),
         accountType.toStdString(),
         username.toStdString(),
-        [](firebase::auth::User* user, const std::string& error) { std::cout << error << std::endl;}
-    );
-    
-    if(user) {
-        QMessageBox::information(signUpWindow, "Success", "Account created successfully!");
-        
-        // Redirect to appropriate portal based on account type
-        if(accountType == "Hiring Manager") {
-            emit hiringManagerSignupSuccess();
-        } else if (accountType == "Freelancer"){
-            emit freelancerSignupSuccess();
-        } else {
-          QMessageBox::information(signUpWindow, "Field empty", "Please pick an account type");
+        [this, signUpWindow, accountType, createAccount](firebase::auth::User* user, const std::string& error) {
+            // Re-enable the button
+            createAccount->setEnabled(true);
+            createAccount->setText("Create Account");
+            
+            if (!error.empty()) {
+                QMessageBox::critical(signUpWindow, "Registration Error", 
+                                     QString::fromStdString("Failed to create account: " + error));
+                return;
+            }
+            
+            if (user) {
+                QMessageBox::information(signUpWindow, "Success", "Account created successfully!");
+                
+                // Redirect to appropriate portal based on account type
+                if(accountType == "Hiring Manager") {
+                    emit hiringManagerSignupSuccess();
+                } else {
+                    emit freelancerSignupSuccess();
+                }
+            } else {
+                QMessageBox::critical(signUpWindow, "Registration Error", 
+                                     "Failed to create account. Please try again.");
+            }
+            
+            // Clean up the server
+            delete server;
+            server = nullptr;
         }
-    } else {
-        QMessageBox::critical(signUpWindow, "Registration Error", "Failed to create account. Please try again.");
-    } });
+    ); });
 
   QPushButton *backButton = new QPushButton("Back", signUpWindow);
 

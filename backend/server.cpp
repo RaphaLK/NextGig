@@ -60,31 +60,56 @@ firebase::auth::User *Server::registerUser(const std::string &email, const std::
     auto future = auth->CreateUserWithEmailAndPassword(email.c_str(), password.c_str());
 
     future.OnCompletion([this, email, accountType, username, callback](const firebase::Future<firebase::auth::AuthResult> &completed_future)
-                        {
+    {
         if (completed_future.error() != firebase::auth::kAuthErrorNone) {
+            std::cerr << "Registration failed: " << completed_future.error_message() << std::endl;
             callback(nullptr, completed_future.error_message());
             return;
         }
 
-        const firebase::auth::AuthResult& result = *completed_future.result();
-        const firebase::auth::User& user = result.user; // user is a reference
+        try {
+            std::cout << "User created successfully" << std::endl;
+            
+            // Get a pointer to the user for safe use after this function completes
+            const firebase::auth::AuthResult& result = *completed_future.result();
+            const firebase::auth::User& user = result.user;
+            firebase::auth::User* userPtr = const_cast<firebase::auth::User*>(&user);
+            
+            if (!userPtr) {
+                callback(nullptr, "User object is null");
+                return;
+            }
+            
+            std::string uid = userPtr->uid();
+            std::cout << "User ID: " << uid << std::endl;
+            
+            firebase::database::DatabaseReference ref = database->GetReference(("users/" + uid).c_str());
+            
+            std::map<std::string, firebase::Variant> userData;
+            userData["email"] = email;
+            userData["username"] = username;
+            userData["accountType"] = accountType;
+            userData["createdAt"] = static_cast<int64_t>(::time(nullptr));
+            
+            // Wait for database write to complete before calling the callback
+            auto setValueFuture = ref.SetValue(userData);
+            setValueFuture.OnCompletion([userPtr, callback](const firebase::Future<void>& future) {
+                if (future.error() != firebase::database::kErrorNone) {
+                    std::cerr << "Failed to save user data: " << future.error_message() << std::endl;
+                    callback(nullptr, future.error_message());
+                } else {
+                    std::cout << "User data saved successfully" << std::endl;
+                    callback(userPtr, "");
+                }
+            });
+        } catch (const std::exception& e) {
+            std::cerr << "Exception during registration: " << e.what() << std::endl;
+            callback(nullptr, std::string("Exception: ") + e.what());
+        }
+    });
 
-        std::string uid = user.uid();
-        firebase::database::DatabaseReference ref = database->GetReference(("users/" + uid).c_str());
-
-        std::map<std::string, firebase::Variant> userData;
-        userData["email"] = email;
-        userData["username"] = username;
-        userData["accountType"] = accountType;
-        userData["createdAt"] = static_cast<int64_t>(::time(nullptr));
-
-        ref.SetValue(userData);
-
-        callback(const_cast<firebase::auth::User*>(&user), ""); });
-
-    return nullptr; // Return nullptr since we're handling the result asynchronously
+    return nullptr;
 }
-
 // Check if user is a HiringManager
 bool Server::isHiringManager(const std::string &uid)
 {
