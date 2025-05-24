@@ -2,6 +2,7 @@
 #include "LoginWindow.h"
 #include "SignUpWindow.h"
 #include "HiringManagerPortal.h"
+#include "FreelancerPortal.h"
 #include <QLabel>
 #include <QPushButton>
 #include <QVBoxLayout>
@@ -25,13 +26,15 @@ void HomeWindow::setupNavigationStack()
 	LoginWindow *loginPage = new LoginWindow();
 	SignUpWindow *signupPage = new SignUpWindow();
 	HiringManagerPortal *h_managerPortal = new HiringManagerPortal;
+	FreelancerPortal *freelancePortal = new FreelancerPortal;
 
 	// Add objects to navigation stack -- indexes are as shown:
 	stack->addWidget(homePage);		// Index 0
 	stack->addWidget(loginPage);	// Index 1
 	stack->addWidget(signupPage); // Index 2
 	stack->addWidget(h_managerPortal);
-	
+	stack->addWidget(freelancePortal);
+
 	// add signals here
 	connect(loginPage, &LoginWindow::returnToHomeRequested, [this]()
 					{ stack->setCurrentIndex(0); });
@@ -39,12 +42,17 @@ void HomeWindow::setupNavigationStack()
 	connect(loginPage, &LoginWindow::hiringManagerLoginSuccess, [this]()
 					{ stack->setCurrentIndex(3); });
 
+	connect(loginPage, &LoginWindow::freelancerLoginSuccess, [this]()
+					{ stack->setCurrentIndex(4); });
+
+	connect(freelancePortal, &FreelancerPortal::returnToHomeRequested, [this]()
+					{ stack->setCurrentIndex(0); });
+
 	connect(signupPage, &SignUpWindow::returnToHomeRequested, [this]()
 					{ stack->setCurrentIndex(0); });
 
 	connect(h_managerPortal, &HiringManagerPortal::returnToHomeRequested, [this]()
 					{ stack->setCurrentIndex(0); });
-
 }
 
 QWidget *HomeWindow::RenderHomePage()

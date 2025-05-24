@@ -28,6 +28,7 @@ add_executable(NextGigFrontend
     JobFeed.cpp
     SignUpWindow.cpp
     HiringManagerPortal.cpp
+    FreelancerPortal.cpp
     client.cpp
 )
 

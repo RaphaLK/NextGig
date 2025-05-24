@@ -4,4 +4,4 @@ if [ "$(basename "$PWD")" != "build" ]; then
 fi
 cmake ..
 ninja
-./backend/NextGigFrontend
+./frontend/NextGigFrontend

@@ -3,4 +3,4 @@ if [ "$(basename "$PWD")" != "build" ]; then
   cd build || exit 1
 fi
 
-./backend/NextGigFrontend
+./frontend/NextGigFrontend
