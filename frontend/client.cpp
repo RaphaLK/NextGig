@@ -129,7 +129,7 @@ void BackendClient::sendRequest(const QJsonObject& request, std::function<void(c
     
     // Convert request to JSON and send
     QJsonDocument doc(request);
-    QByteArray jsonData = doc.toJson();
+    QByteArray jsonData = doc.toJson(QJsonDocument::Compact);
     
     qDebug() << "Sending request:" << doc.toJson();
 
