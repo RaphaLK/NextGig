@@ -5,7 +5,7 @@ set(CMAKE_AUTOMOC ON)
 set(CMAKE_AUTORCC ON)
 set(CMAKE_AUTOUIC ON)
 
-find_package(Qt5 COMPONENTS Widgets REQUIRED)
+find_package(Qt5 REQUIRED COMPONENTS Widgets Network )
 
 if(WIN32)
     link_directories(${CMAKE_SOURCE_DIR}/firebase_cpp_sdk/libs/windows/x64)
@@ -28,6 +28,7 @@ add_executable(NextGigFrontend
     JobFeed.cpp
     SignUpWindow.cpp
     HiringManagerPortal.cpp
+    client.cpp
 )
 
 target_include_directories(NextGigFrontend PRIVATE 
@@ -38,6 +39,7 @@ target_include_directories(NextGigFrontend PRIVATE
 if(UNIX)
     target_link_libraries(NextGigFrontend PRIVATE 
         Qt5::Widgets
+        Qt5::Network
         firebase_auth
         firebase_database
         firebase_app
@@ -48,6 +50,7 @@ if(UNIX)
 elseif(WIN32 OR APPLE)
     target_link_libraries(NextGigFrontend PRIVATE 
         Qt5::Widgets
+        Qt5::Network
         firebase_auth
         firebase_database
         firebase_app

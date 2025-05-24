@@ -75,7 +75,8 @@ QWidget *SignUpWindow::RenderSignUpWindow()
     
     // Call backend to register user - store the server instance as a member variable 
     // to prevent it from being destroyed before callback completes
-    server = new Server();  // Add server as member variable in SignUpWindow class
+    server = new Server();  
+      
     server->registerUser(
         email.toStdString(), 
         password.toStdString(),
