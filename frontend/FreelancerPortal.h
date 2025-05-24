@@ -1,36 +1,34 @@
 #pragma once
 #include <QWidget>
-#include <QListWidget>
 #include <QLabel>
 #include <QTextEdit>
-#include <QCheckBox>
+#include <QListWidget>
 #include "../src/models/User.h"
 
-class HiringManagerPortal : public QWidget {
+class FreelancerPortal : public QWidget {
   Q_OBJECT
 public:
-  explicit HiringManagerPortal(QWidget *parent = nullptr);
-  QWidget* renderHiringManagerPortal();
+  explicit FreelancerPortal(QWidget *parent = nullptr);
+  QWidget* renderFreelancerPortal();
   void setCurrentUser(User* user);
-
-private:
-  // Tab creation methods
-  QWidget* createDashboardTab();
-  QWidget* createProfileTab();
-  QWidget* createPostJobTab();
-  QWidget* createMessagesTab();
-  QWidget* createRatingsTab();
   
-  // Helper methods
+private:
+  QWidget* createJobsTab();
+  QWidget* createProfileTab();
+  QWidget* createMessagesTab();
   void updateProfileInfo();
   
   // UI elements that need to be accessed from multiple methods
-  QListWidget* postedJobsList;
+  QListWidget* jobsList;
+  QLabel* jobTitleLabel;
+  QLabel* jobDescriptionLabel;
   QLabel* nameLabel;
-  QLabel* emailLabel;
   QTextEdit* descriptionTextEdit;
+  QListWidget* skillsListWidget;
+  QListWidget* jobHistoryList;
+  QListWidget* accomplishmentsList;
   
-  // User data
+  // Current user data
   User* currentUser;
 
 signals:

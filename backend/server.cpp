@@ -263,7 +263,6 @@ void Server::handleClient(int clientSocket)
             requestBuffer += buffer;
 
             // Check if we have a complete request
-            // For simplicity, assume requests end with a newline character
             size_t newlinePos = requestBuffer.find('\n');
             while (newlinePos != std::string::npos)
             {

@@ -11,4 +11,6 @@ public:
 signals:
   void returnToHomeRequested();
   void hiringManagerLoginSuccess();
+  void freelancerLoginSuccess();
+
 };
