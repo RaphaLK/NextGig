@@ -10,4 +10,6 @@ public:
   QWidget* RenderSignUpWindow();
 signals:
   void returnToHomeRequested();
+  void hiringManagerSignupSuccess();
+  void freelancerSignupSuccess();
 };

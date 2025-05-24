@@ -5,7 +5,7 @@ set(CMAKE_AUTOMOC ON)
 set(CMAKE_AUTORCC ON)
 set(CMAKE_AUTOUIC ON)
 
-# Firebase SDK Paths -- Anshu and Josh, check ur own 
+# Firebase SDK Paths -- Anshu and Josh, check ur own
 if(WIN32)
     link_directories(${CMAKE_SOURCE_DIR}/firebase_cpp_sdk/libs/windows/x64)
     include_directories(${CMAKE_SOURCE_DIR}/firebase_cpp_sdk/include)
@@ -19,16 +19,45 @@ else()
     message(FATAL_ERROR "How??????????????")
 endif()
 
+add_library(NextGigBackendLib STATIC
+    server.cpp
+    server.h
+)
+
+if(UNIX)
+    target_link_libraries(NextGigBackendLib PUBLIC
+        firebase_auth
+        firebase_database
+        firebase_app
+        secret-1
+        glib-2.0
+    )
+elseif(WIN32 OR APPLE)
+    target_link_libraries(NextGigBackendLib PUBLIC
+        firebase_auth
+        firebase_database
+        firebase_app
+    )
+endif()
+
 add_executable(NextGigBackend
     main.cpp
     server.cpp
     server.h
 )
 
-target_link_libraries(NextGigBackend
-    firebase_auth
-    firebase_database
-    firebase_app
-    secret-1
-    glib-2.0
-)
+if(UNIX)
+    target_link_libraries(NextGigBackend PRIVATE
+        firebase_auth
+        firebase_database
+        firebase_app
+        secret-1
+        glib-2.0
+    )
+elseif(WIN32 OR APPLE)
+    target_link_libraries(NextGigBackend PRIVATE
+        firebase_auth
+        firebase_database
+        firebase_app
+    )
+endif()
