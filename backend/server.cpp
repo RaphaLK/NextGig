@@ -41,6 +41,7 @@ Server::Server()
         std::cerr << "Failed to initialize Firebase Database." << std::endl;
         return;
     }
+    database->set_persistence_enabled(true);
 
     std::cout << "Firebase initialized successfully." << std::endl;
 }

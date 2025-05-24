@@ -17,8 +17,8 @@ BackendClient::BackendClient(QObject* parent) : QObject(parent), connected(false
     connect(socket, &QTcpSocket::connected, this, &BackendClient::onConnected);
     connect(socket, &QTcpSocket::disconnected, this, &BackendClient::onDisconnected);
     connect(socket, &QTcpSocket::readyRead, this, &BackendClient::onReadyRead);
-    connect(socket, QOverload<QAbstractSocket::SocketError>::of(&QTcpSocket::error),
-            this, &BackendClient::onError);
+    connect(socket, &QTcpSocket::errorOccurred, this, &BackendClient::onError);
+
 }
 
 BackendClient* BackendClient::getInstance() {
