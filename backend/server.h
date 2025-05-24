@@ -2,13 +2,23 @@
 #include <firebase/auth.h>
 #include <firebase/database.h>
 #include <firebase/app.h>
+#include <string>
+#include <map>
 
-class Server {
+class Server
+{
 public:
     Server();
-    void signIn(const std::string& email, const std::string& password);
-    void writeData(const std::string& path, const std::string& value);
+    firebase::auth::User *signIn(const std::string &email, const std::string &password);
+    void registerUser(const std::string &email, const std::string &password,
+                      const std::string &accountType, const std::string &username,
+                      std::function<void(firebase::auth::User *, const std::string &error)> callback);
+
+    bool isHiringManager(const std::string &uid);
+    void writeData(const std::string &path, const std::string &value);
+    void signOut();
+
 private:
-    firebase::auth::Auth* auth;
-    firebase::database::Database* database;
+    firebase::auth::Auth *auth;
+    firebase::database::Database *database;
 };
