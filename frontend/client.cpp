@@ -34,10 +34,24 @@ bool BackendClient::connectToServer(const QString& host, quint16 port) {
     socket->connectToHost(host, port);
     return socket->waitForConnected(5000); // 5 second timeout
 }
-
-void BackendClient::disconnect() {
+void BackendClient::disconnectFromServer() {
     if (connected) {
+        // Disconnect any pending signal connections to avoid memory leaks
+        this->disconnect(this, &BackendClient::serverResponseReceived, nullptr, nullptr);
+        
+        // Close the socket connection
         socket->disconnectFromHost();
+        
+        // If the socket is still in a state where it's waiting for more data,
+        // force it to close after a brief timeout
+        if (socket->state() != QAbstractSocket::UnconnectedState) {
+            if (!socket->waitForDisconnected(1000)) {
+                socket->abort(); // Force socket closed if it doesn't disconnect cleanly
+            }
+        }
+        
+        connected = false;
+        qDebug() << "Client disconnected from server";
     }
 }
 
@@ -117,23 +131,19 @@ void BackendClient::sendRequest(const QJsonObject& request, std::function<void(c
     QJsonDocument doc(request);
     QByteArray jsonData = doc.toJson();
     
-    // Add a size header to the message (4 bytes for message length)
-    QByteArray message;
-    QDataStream stream(&message, QIODevice::WriteOnly);
-    stream.setVersion(QDataStream::Qt_5_15);
-    
-    stream << jsonData.size();
-    message.append(jsonData);
-    
-    socket->write(message);
-    
-    // In a real implementation, you would track the callback and match with response
-    // This is a simplified version
-    
-    // For now, we'll use a lambda that captures the callback to handle the response
-    // This is demo code - you'd need a proper message ID system for production
-    connect(this, &BackendClient::serverResponseReceived, [callback](const QJsonObject& response) {
+    qDebug() << "Sending request:" << doc.toJson();
+
+    jsonData.append('\n');
+
+    // Send the data
+    socket->write(jsonData);
+    socket->flush();
+      
+    connect(this, &BackendClient::serverResponseReceived, this, [callback, this](const QJsonObject& response) {
+        qDebug() << "Received response:" << response;
         callback(response);
+        // Disconnect after handling this response
+        disconnect(this, &BackendClient::serverResponseReceived, this, nullptr);
     });
 }
 
@@ -154,28 +164,34 @@ void BackendClient::onError(QAbstractSocket::SocketError socketError) {
 }
 
 void BackendClient::onReadyRead() {
-    // In a real implementation, you'd parse the incoming data properly
-    // This is a simplified version
     
     QDataStream in(socket);
     in.setVersion(QDataStream::Qt_5_15);
     
-    // Read the message size
+    // Make sure we have a complete size header
+    if (socket->bytesAvailable() < sizeof(quint32)) {
+        return; // Wait for more data
+    }
+    
+    // Read message size
     quint32 messageSize;
-    if (socket->bytesAvailable() < sizeof(quint32))
-        return;
-        
     in >> messageSize;
     
     // Wait until we have the full message
-    if (socket->bytesAvailable() < messageSize)
-        return;
-        
+    if (socket->bytesAvailable() < messageSize) {
+        return; // Wait for more data
+    }
+    
     // Read the JSON data
     QByteArray jsonData = socket->read(messageSize);
-    QJsonDocument doc = QJsonDocument::fromJson(jsonData);
-    QJsonObject response = doc.object();
+    qDebug() << "Received data:" << jsonData;
     
-    // Emit signal with the response
+    QJsonDocument doc = QJsonDocument::fromJson(jsonData);
+    if (doc.isNull()) {
+        qDebug() << "Invalid JSON received";
+        return;
+    }
+    
+    QJsonObject response = doc.object();
     emit serverResponseReceived(response);
 }

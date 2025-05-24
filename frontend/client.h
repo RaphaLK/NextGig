@@ -23,7 +23,7 @@ public:
     
     // Connection methods
     bool connectToServer(const QString& host = "localhost", quint16 port = 8080);
-    void disconnect();
+    void disconnectFromServer();
     bool isConnected() const;
     
     // Authentication methods

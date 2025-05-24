@@ -315,6 +315,7 @@ void Server::processRequest(int clientSocket, const std::string &request)
 
     if (requestType == "signin")
     {
+        std::cout << "Processing signin request" << std::endl;
         QString email = jsonRequest["email"].toString();
         QString password = jsonRequest["password"].toString();
 
@@ -338,6 +339,7 @@ void Server::processRequest(int clientSocket, const std::string &request)
     }
     else if (requestType == "register")
     {
+        std::cout << "Processing register request for " << jsonRequest["email"].toString().toStdString() << std::endl;
         QString email = jsonRequest["email"].toString();
         QString password = jsonRequest["password"].toString();
         QString accountType = jsonRequest["accountType"].toString();
