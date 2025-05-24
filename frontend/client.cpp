@@ -164,26 +164,8 @@ void BackendClient::onError(QAbstractSocket::SocketError socketError) {
 }
 
 void BackendClient::onReadyRead() {
-    
-    QDataStream in(socket);
-    in.setVersion(QDataStream::Qt_5_15);
-    
-    // Make sure we have a complete size header
-    if (socket->bytesAvailable() < sizeof(quint32)) {
-        return; // Wait for more data
-    }
-    
-    // Read message size
-    quint32 messageSize;
-    in >> messageSize;
-    
-    // Wait until we have the full message
-    if (socket->bytesAvailable() < messageSize) {
-        return; // Wait for more data
-    }
-    
-    // Read the JSON data
-    QByteArray jsonData = socket->read(messageSize);
+    // Read all available data
+    QByteArray jsonData = socket->readAll();
     qDebug() << "Received data:" << jsonData;
     
     QJsonDocument doc = QJsonDocument::fromJson(jsonData);

@@ -1,6 +1,6 @@
 #pragma once
 #include <firebase/auth.h>
-#include <firebase/database.h>
+#include <firebase/firestore.h>  
 #include <firebase/app.h>
 #include <string>
 #include <map>
@@ -31,7 +31,7 @@ public:
 
 private:
     firebase::auth::Auth *auth;
-    firebase::database::Database *database;
+    firebase::firestore::Firestore *firestore; 
 
     // Socket server variables
     bool running;

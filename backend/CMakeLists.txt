@@ -29,7 +29,7 @@ if(UNIX)
     target_link_libraries(NextGigBackendLib PUBLIC
         Qt5::Core
         firebase_auth
-        firebase_database
+        firebase_firestore
         firebase_app
         secret-1
         glib-2.0
@@ -37,7 +37,7 @@ if(UNIX)
 elseif(WIN32 OR APPLE)
     target_link_libraries(NextGigBackendLib PUBLIC
         firebase_auth
-        firebase_database
+        firebase_firestore
         firebase_app
         Qt5::Core
     )
@@ -52,7 +52,7 @@ add_executable(NextGigBackend
 if(UNIX)
     target_link_libraries(NextGigBackend PRIVATE
         firebase_auth
-        firebase_database
+        firebase_firestore
         firebase_app
         secret-1
         glib-2.0
@@ -61,7 +61,7 @@ if(UNIX)
 elseif(WIN32 OR APPLE)
     target_link_libraries(NextGigBackend PRIVATE
         firebase_auth
-        firebase_database
+        firebase_firestore
         firebase_app
         Qt5::Core
     )

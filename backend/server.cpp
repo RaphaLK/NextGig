@@ -14,7 +14,7 @@ Server::Server()
     firebase::AppOptions options;
     options.set_api_key("AIzaSyDZd-3ROjIock8O2-NgpoLxgciVsfVq5Uk");
     options.set_project_id("scumydegree-f4ed8");
-    options.set_database_url("https://scumydegree-f4ed8.firebaseio.com");
+    // options.set_database_url("https://scumydegree-f4ed8.firebaseio.com");
     options.set_storage_bucket("scumydegree-f4ed8.appspot.com");
     options.set_app_id("1:174532801638:android:c02e1725c79e1d760c69a7");
 
@@ -34,15 +34,28 @@ Server::Server()
         return;
     }
 
-    // Initialize Firestore -- i love segfaults
-    database = firebase::database::Database::GetInstance(app);
-    if (!database)
+    // Initialize Firestore
+    firestore = firebase::firestore::Firestore::GetInstance(app);
+    if (!firestore)
     {
-        std::cerr << "Failed to initialize Firebase Database." << std::endl;
+        std::cerr << "Failed to initialize Firebase Firestore." << std::endl;
         return;
     }
-    database->set_persistence_enabled(true);
 
+    // Test Firestore connection
+    // firebase::firestore::DocumentReference testRef = firestore->Collection("server_tests").Document("connection_test");
+    // firebase::firestore::MapFieldValue testData;
+    // testData["status"] = firebase::firestore::FieldValue::String("connected");
+    // testData["timestamp"] = firebase::firestore::FieldValue::ServerTimestamp();
+
+    // auto testFuture = testRef.Set(testData);
+    // testFuture.OnCompletion([](const firebase::Future<void> &future)
+    //                         {
+    //     if (future.error() != firebase::firestore::kErrorOk) {
+    //         std::cerr << "Firestore test write failed: " << future.error_message() << std::endl;
+    //     } else {
+    //         std::cout << "Firestore test write successful" << std::endl;
+    //     } });
     std::cout << "Firebase initialized successfully." << std::endl;
 }
 
@@ -67,7 +80,6 @@ void Server::signOut()
     std::cout << "User signed out." << std::endl;
 }
 
-// Register a new user
 firebase::auth::User *Server::registerUser(const std::string &email, const std::string &password,
                                            const std::string &accountType, const std::string &username,
                                            std::function<void(firebase::auth::User *, const std::string &error)> callback)
@@ -98,22 +110,23 @@ firebase::auth::User *Server::registerUser(const std::string &email, const std::
             std::string uid = userPtr->uid();
             std::cout << "User ID: " << uid << std::endl;
             
-            firebase::database::DatabaseReference ref = database->GetReference(("users/" + uid).c_str());
+            // Use Firestore instead of Realtime Database
+            firebase::firestore::DocumentReference userDoc = firestore->Collection("users").Document(uid);
             
-            std::map<std::string, firebase::Variant> userData;
-            userData["email"] = email;
-            userData["username"] = username;
-            userData["accountType"] = accountType;
-            userData["createdAt"] = static_cast<int64_t>(::time(nullptr));
+            firebase::firestore::MapFieldValue userData;
+            userData["email"] = firebase::firestore::FieldValue::String(email);
+            userData["username"] = firebase::firestore::FieldValue::String(username);
+            userData["accountType"] = firebase::firestore::FieldValue::String(accountType);
+            userData["createdAt"] = firebase::firestore::FieldValue::ServerTimestamp();
             
-            // Wait for database write to complete before calling the callback
-            auto setValueFuture = ref.SetValue(userData);
-            setValueFuture.OnCompletion([userPtr, callback](const firebase::Future<void>& future) {
-                if (future.error() != firebase::database::kErrorNone) {
+            // Wait for firestore write to complete before calling the callback
+            auto setDocFuture = userDoc.Set(userData);
+            setDocFuture.OnCompletion([userPtr, uid, callback](const firebase::Future<void>& future) {
+                if (future.error() != firebase::firestore::kErrorOk) {
                     std::cerr << "Failed to save user data: " << future.error_message() << std::endl;
                     callback(nullptr, future.error_message());
                 } else {
-                    std::cout << "User data saved successfully" << std::endl;
+                    std::cout << "User data saved successfully for uid: " << uid << std::endl;
                     callback(userPtr, "");
                 }
             });
@@ -165,28 +178,32 @@ bool Server::startServer(int port)
     return true;
 }
 
-void Server::stopServer() {
-    if (!running) return;
-    
+void Server::stopServer()
+{
+    if (!running)
+        return;
+
     running = false;
-    
+
     // Close server socket to unblock accept()
     close(serverSocket);
-    
+
     // Wait for server thread to finish
-    if (serverThread.joinable()) {
+    if (serverThread.joinable())
+    {
         serverThread.join();
     }
-    
+
     // Close all client connections
     {
         std::lock_guard<std::mutex> lock(clientsMutex);
-        for (int socket : clientSockets) {
+        for (int socket : clientSockets)
+        {
             close(socket);
         }
         clientSockets.clear();
     }
-    
+
     std::cout << "Server stopped" << std::endl;
 }
 
@@ -382,28 +399,33 @@ void Server::processRequest(int clientSocket, const std::string &request)
     else if (requestType == "isHiringManager")
     {
         QString uid = jsonRequest["uid"].toString();
-        firebase::database::DatabaseReference ref = database->GetReference(("users/" + uid.toStdString() + "/accountType").c_str());
-        auto future = ref.GetValue();
+        firebase::firestore::DocumentReference ref = firestore->Collection("users").Document(uid.toStdString());
+        auto future = ref.Get();
 
-        future.OnCompletion([this, clientSocket](const firebase::Future<firebase::database::DataSnapshot> &result)
+        future.OnCompletion([this, clientSocket](const firebase::Future<firebase::firestore::DocumentSnapshot> &result)
                             {
-            QJsonObject response;
+        QJsonObject response;
 
-            if (result.error() != firebase::database::kErrorNone) {
-                response["status"] = "error";
-                response["error"] = result.error_message();
-            } else {
-                firebase::database::DataSnapshot snapshot = *result.result();
-                response["status"] = "success";
-                if (snapshot.exists() && snapshot.value().is_string()) {
-                    response["isHiringManager"] = (snapshot.value().string_value() == "Hiring Manager");
+        if (result.error() != firebase::firestore::kErrorOk) {
+            response["status"] = "error";
+            response["error"] = result.error_message();
+        } else {
+            firebase::firestore::DocumentSnapshot snapshot = *result.result();
+            response["status"] = "success";
+            if (snapshot.exists()) {
+                auto accountType = snapshot.Get("accountType");
+                if (accountType.is_string()) {
+                    response["isHiringManager"] = (accountType.string_value() == "Hiring Manager");
                 } else {
                     response["isHiringManager"] = false;
                 }
+            } else {
+                response["isHiringManager"] = false;
             }
+        }
 
-            QJsonDocument responseDoc(response);
-            sendResponse(clientSocket, responseDoc.toJson(QJsonDocument::Compact).toStdString()); });
+        QJsonDocument responseDoc(response);
+        sendResponse(clientSocket, responseDoc.toJson(QJsonDocument::Compact).toStdString()); });
     }
     else
     {
@@ -416,37 +438,56 @@ void Server::processRequest(int clientSocket, const std::string &request)
     }
 }
 
-void Server::sendResponse(int clientSocket, const std::string &response) {
+void Server::sendResponse(int clientSocket, const std::string &response)
+{
     // Add newline as message terminator
     std::string fullResponse = response + "\n";
-    
+
     // Send response
     ssize_t bytesSent = send(clientSocket, fullResponse.c_str(), fullResponse.size(), 0);
-    
-    if (bytesSent < 0) {
+
+    if (bytesSent < 0)
+    {
         std::cerr << "Failed to send response: " << strerror(errno) << std::endl;
-    } else if (static_cast<size_t>(bytesSent) < fullResponse.size()) {
+    }
+    else if (static_cast<size_t>(bytesSent) < fullResponse.size())
+    {
         std::cerr << "Warning: Not all data was sent" << std::endl;
-    } else {
+    }
+    else
+    {
         std::cout << "Response sent successfully" << std::endl;
     }
-}// Check if user is a HiringManager
+}
+
+// Check if user is a HiringManager
 bool Server::isHiringManager(const std::string &uid)
 {
-    firebase::database::DatabaseReference ref = database->GetReference(("users/" + uid + "/accountType").c_str());
-    auto future = ref.GetValue();
-    future.OnCompletion([](const firebase::Future<firebase::database::DataSnapshot> &result)
-                        {
-        if (result.error() != firebase::database::kErrorNone) {
-            std::cerr << "Error getting user type: " << result.error_message() << std::endl;
-            return false;
-        }
-        
-        firebase::database::DataSnapshot snapshot = *result.result();
-        if (snapshot.exists() && snapshot.value().is_string()) {
-            return snapshot.value().string_value() == "Hiring Manager";
-        }
-        return false; });
+    // Synchronous approach for simplicity
+    auto docRef = firestore->Collection("users").Document(uid);
+    auto future = docRef.Get();
 
-    return false; // This will be replaced in the completion callback
+    // Wait for result (not ideal in production but simpler for this example)
+    while (future.status() == firebase::kFutureStatusPending)
+    {
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+    }
+
+    if (future.error() != firebase::firestore::kErrorOk)
+    {
+        std::cerr << "Error getting user type: " << future.error_message() << std::endl;
+        return false;
+    }
+
+    auto result = *future.result();
+    if (!result.exists())
+        return false;
+
+    auto accountType = result.Get("accountType");
+    if (accountType.is_string())
+    {
+        return accountType.string_value() == "Hiring Manager";
+    }
+
+    return false;
 }
