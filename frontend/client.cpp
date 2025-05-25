@@ -134,8 +134,15 @@ void BackendClient::signOut(std::function<void(bool)> callback) {
     QJsonObject request;
     request["type"] = "signout";
     
-    sendRequest(request, [callback](const QJsonObject& response) {
+    sendRequest(request, [this, callback](const QJsonObject& response) {
         bool success = (response["status"].toString() == "success");
+        
+        // Clean up the current user object
+        if (currentUser) {
+            delete currentUser; // Free memory
+            currentUser = nullptr; // Reset pointer
+        }
+        
         callback(success);
     });
 }

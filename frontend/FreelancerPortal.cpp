@@ -1,5 +1,6 @@
 // Home page for the freelancer
 #include "FreelancerPortal.h"
+#include "client.h"
 // #include "../src/models/User.h"
 #include <QVBoxLayout>
 #include <QHBoxLayout>
@@ -82,7 +83,16 @@ QWidget* FreelancerPortal::renderFreelancerPortal() {
     QPushButton *logoutBtn = new QPushButton("Logout");
     logoutBtn->setStyleSheet("padding: 8px; font-size: 13px; color: #fff; background: #d9534f;");
     connect(logoutBtn, &QPushButton::clicked, [this](){
-        emit returnToHomeRequested();
+        BackendClient* client = BackendClient::getInstance();
+        // Logout from server
+        client->signOut([this](bool success) {
+            if (success) {
+                emit returnToHomeRequested();
+            } else {
+                QMessageBox::warning(this, "Logout Error", 
+                                     "Failed to log out. Please try again.");
+            }
+        });
     });
     
     headerLayout->addWidget(welcomeLabel, 1);
