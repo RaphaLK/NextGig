@@ -30,6 +30,7 @@ add_executable(NextGigFrontend
     HiringManagerPortal.cpp
     FreelancerPortal.cpp
     client.cpp
+    ../src/models/User.cpp 
 )
 
 target_include_directories(NextGigFrontend PRIVATE 

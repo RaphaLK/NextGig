@@ -4,6 +4,8 @@
 #include <QHBoxLayout>
 #include <QPushButton>
 #include <QLineEdit>
+#include <QMessageBox>
+#include "client.h"
 
 LoginWindow::LoginWindow(QWidget *parent) : QWidget(parent)
 {
@@ -38,18 +40,41 @@ QWidget *LoginWindow::RenderLoginWindow()
   passwordInput->setEchoMode(QLineEdit::Password);
   passwordInput->setStyleSheet("padding: 8px; font-size: 14px;");
 
-  QPushButton *loginButton_Freelancer = new QPushButton("Login (Freelance)", loginWindow);
-  connect(loginButton_Freelancer, &QPushButton::clicked, [this]() {
-    emit freelancerLoginSuccess();
-  });
-  QPushButton *loginButton_HiringManager = new QPushButton("Login (Hiring Manager)", loginWindow);
-  connect(loginButton_HiringManager, &QPushButton::clicked, [this]() {
-    emit hiringManagerLoginSuccess();
+  QPushButton *loginButton = new QPushButton("Login", loginWindow);
+  connect(loginButton, &QPushButton::clicked, [this, emailInput, passwordInput]() {
+    QString email = emailInput->text();
+    QString password = passwordInput->text();
+    
+    if (email.isEmpty() || password.isEmpty()) {
+        QMessageBox::warning(this, "Login Error", "Please enter email and password");
+        return;
+    }
+    
+    // Get client instance
+    BackendClient* client = BackendClient::getInstance();
+    
+    // Connect to server if not already connected
+    if (!client->isConnected() && !client->connectToServer()) {
+        QMessageBox::critical(this, "Connection Error", "Failed to connect to server");
+        return;
+    }
+    
+    // Sign in
+    client->signIn(email, password, [this](User* user, const QString& error) {
+        if (user) {
+            if (user->getUserType() == User::FREELANCER) {
+                emit freelancerLoginSuccess();
+            } else if (user->getUserType() == User::HIRING_MANAGER) {
+                emit hiringManagerLoginSuccess();
+            }
+        } else {
+            QMessageBox::warning(this, "Login Error", "Invalid email or password: " + error);
+        }
+    });;
   });
 
   QString buttonStyle = "QPushButton { padding: 10px; font-size: 14px; }";
-  loginButton_Freelancer->setStyleSheet(buttonStyle);
-  loginButton_HiringManager->setStyleSheet(buttonStyle);
+  loginButton->setStyleSheet(buttonStyle);
 
   QPushButton *backButton = new QPushButton("Back", loginWindow);
   connect(backButton, &QPushButton::clicked, [this]() {
@@ -72,8 +97,7 @@ QWidget *LoginWindow::RenderLoginWindow()
 
   // Place login buttons below the inputs
   QHBoxLayout *buttonLayout = new QHBoxLayout();
-  buttonLayout->addWidget(loginButton_Freelancer);
-  buttonLayout->addWidget(loginButton_HiringManager);
+  buttonLayout->addWidget(loginButton);
   layout->addLayout(buttonLayout);
 
   layout->addStretch();

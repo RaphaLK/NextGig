@@ -4,6 +4,11 @@
 
 using namespace std;
 
+enum UserType
+{
+    FREELANCER,
+    HIRING_MANAGER
+};
 typedef struct experience
 {
     string jobTitle;
@@ -14,6 +19,13 @@ typedef struct experience
 
 class User
 {
+public:
+    enum UserType
+    {
+        FREELANCER,
+        HIRING_MANAGER
+    };
+private:
     string uid;
     string name;
     string email;
@@ -23,16 +35,17 @@ class User
     vector<experience> jobHistory;
     vector<string> accomplishments;
     bool isAuthenticated;
+    UserType userType;
 
 public:
     User(string _uid, string _email, string _name,
          string _description, vector<string> _tags,
          experience _education, vector<string> _accomplishments,
-         vector<experience> _jobHistory) : uid(_uid), email(_email), name(_name),
-                                           description(_description), tags(_tags),
-                                           education(_education), accomplishments(_accomplishments),
-                                           jobHistory(_jobHistory), isAuthenticated(false) {}
-                                           
+         vector<experience> _jobHistory, UserType _userType) : uid(_uid), email(_email), name(_name),
+                                                               description(_description), tags(_tags),
+                                                               education(_education), accomplishments(_accomplishments),
+                                                               jobHistory(_jobHistory), isAuthenticated(false), userType(_userType) {}
+
     virtual ~User();
     // profile get
     string getName() { return name; };
@@ -40,6 +53,7 @@ public:
     vector<string> getTags() { return tags; };
     vector<string> getAccomplishments() { return accomplishments; };
     vector<experience> getJobHistory() { return jobHistory; };
+    UserType getUserType() const { return userType; }
 
     // auth
     string getUid() const { return uid; }
