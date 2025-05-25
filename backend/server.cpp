@@ -86,7 +86,7 @@ firebase::auth::User *Server::registerUser(const std::string &email, const std::
                                            std::function<void(firebase::auth::User *, const std::string &error)> callback)
 {
     auto future = auth->CreateUserWithEmailAndPassword(email.c_str(), password.c_str());
-
+    
     future.OnCompletion([this, email, accountType, username, callback](const firebase::Future<firebase::auth::AuthResult> &completed_future)
                         {
         if (completed_future.error() != firebase::auth::kAuthErrorNone) {
@@ -101,6 +101,7 @@ firebase::auth::User *Server::registerUser(const std::string &email, const std::
             // Get a pointer to the user for safe use after this function completes
             const firebase::auth::AuthResult& result = *completed_future.result();
             const firebase::auth::User& user = result.user;
+            
             firebase::auth::User* userPtr = const_cast<firebase::auth::User*>(&user);
             
             if (!userPtr) {
@@ -114,11 +115,54 @@ firebase::auth::User *Server::registerUser(const std::string &email, const std::
             // Use Firestore instead of Realtime Database
             firebase::firestore::DocumentReference userDoc = firestore->Collection("users").Document(uid);
             
+            // Start with common fields for both user types
             firebase::firestore::MapFieldValue userData;
             userData["email"] = firebase::firestore::FieldValue::String(email);
             userData["username"] = firebase::firestore::FieldValue::String(username);
             userData["accountType"] = firebase::firestore::FieldValue::String(accountType);
             userData["createdAt"] = firebase::firestore::FieldValue::ServerTimestamp();
+            userData["description"] = firebase::firestore::FieldValue::String("");
+            
+            // Create empty arrays for common collections
+            std::vector<firebase::firestore::FieldValue, std::allocator<firebase::firestore::FieldValue>> emptyJobHistory;
+            std::vector<firebase::firestore::FieldValue, std::allocator<firebase::firestore::FieldValue>> emptyTags;
+            std::vector<firebase::firestore::FieldValue, std::allocator<firebase::firestore::FieldValue>> emptyAccomplishments;
+            
+            userData["tags"] = firebase::firestore::FieldValue::Array(emptyTags);
+            userData["accomplishments"] = firebase::firestore::FieldValue::Array(emptyAccomplishments);
+            
+            // Create empty education struct
+            firebase::firestore::MapFieldValue education;
+            education["jobTitle"] = firebase::firestore::FieldValue::String("");
+            education["startDate"] = firebase::firestore::FieldValue::String("");
+            education["endDate"] = firebase::firestore::FieldValue::String("");
+            education["description"] = firebase::firestore::FieldValue::String("");
+            
+            userData["education"] = firebase::firestore::FieldValue::Map(education);
+            userData["jobHistory"] = firebase::firestore::FieldValue::Array(emptyJobHistory);
+            
+            // Add user type-specific fields
+            if (accountType == "Hiring Manager") {
+                userData["companyName"] = firebase::firestore::FieldValue::String("");
+                userData["companyDescription"] = firebase::firestore::FieldValue::String("");
+                
+                // Add additional Hiring Manager specific fields
+                std::vector<firebase::firestore::FieldValue, std::allocator<firebase::firestore::FieldValue>> emptyJobPostings;
+                userData["jobPostings"] = firebase::firestore::FieldValue::Array(emptyJobPostings);
+            } else {
+                // For Freelancer
+                userData["hourlyRate"] = firebase::firestore::FieldValue::Double(0.0);
+                
+                // Add additional Freelancer specific fields
+                std::vector<firebase::firestore::FieldValue, std::allocator<firebase::firestore::FieldValue>> emptySkills;
+                userData["skills"] = firebase::firestore::FieldValue::Array(emptySkills);
+                
+                // Freelancer preferences
+                firebase::firestore::MapFieldValue preferences;
+                preferences["remoteOnly"] = firebase::firestore::FieldValue::Boolean(false);
+                preferences["minHourlyRate"] = firebase::firestore::FieldValue::Double(0.0);
+                userData["preferences"] = firebase::firestore::FieldValue::Map(preferences);
+            }
             
             // Wait for firestore write to complete before calling the callback
             auto setDocFuture = userDoc.Set(userData);
