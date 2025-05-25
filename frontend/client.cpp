@@ -34,6 +34,7 @@ bool BackendClient::connectToServer(const QString& host, quint16 port) {
     socket->connectToHost(host, port);
     return socket->waitForConnected(5000); // 5 second timeout
 }
+
 void BackendClient::disconnectFromServer() {
     if (connected) {
         // Disconnect any pending signal connections to avoid memory leaks
@@ -59,24 +60,6 @@ bool BackendClient::isConnected() const {
     return connected;
 }
 
-void BackendClient::signIn(const QString& email, const QString& password, 
-                           std::function<void(firebase::auth::User*, const QString&)> callback) {
-    QJsonObject request;
-    request["type"] = "signin";
-    request["email"] = email;
-    request["password"] = password;
-    
-    sendRequest(request, [callback](const QJsonObject& response) {
-        if (response["status"].toString() == "success") {
-            // In a real implementation, you'd convert JSON to User object
-            // For now, we'll pass nullptr as the user since we can't create Firebase objects
-            callback(nullptr, "");
-        } else {
-            callback(nullptr, response["error"].toString());
-        }
-    });
-}
-
 void BackendClient::registerUser(const QString& email, const QString& password,
                                  const QString& accountType, const QString& username,
                                  std::function<void(firebase::auth::User*, const QString&)> callback) {
@@ -91,6 +74,56 @@ void BackendClient::registerUser(const QString& email, const QString& password,
         if (response["status"].toString() == "success") {
             // In a real implementation, you'd convert JSON to User object
             callback(nullptr, "");
+        } else {
+            callback(nullptr, response["error"].toString());
+        }
+    });
+}
+
+void BackendClient::signIn(const QString& email, const QString& password,
+                         std::function<void(User*, const QString&)> callback) {
+    QJsonObject request;
+    request["type"] = "signin";
+    request["email"] = email;
+    request["password"] = password;
+    
+    sendRequest(request, [this, callback](const QJsonObject& response) {
+        if (response["status"].toString() == "success") {
+            // Extract user data from response
+            QString uid = response["uid"].toString();
+            QString email = response["email"].toString();
+            QString name = response["name"].toString();
+            QString description = response["description"].toString();
+            bool isHiringManager = response["isHiringManager"].toBool();
+            
+            // Create basic user data -- a firestore fetch to be used later
+            std::vector<std::string> tags;  
+            experience edu = {"", "", "", ""};  
+            std::vector<std::string> accomplishments;  
+            std::vector<experience> jobHistory;
+            
+            // Create the appropriate user object based on type
+            if (isHiringManager) {
+                QString companyName = response["companyName"].toString();
+                QString companyDesc = response["companyDescription"].toString();
+                
+                currentUser = new HiringManager(
+                    uid.toStdString(), email.toStdString(), name.toStdString(),
+                    description.toStdString(), tags, edu, accomplishments, jobHistory,
+                    companyName.toStdString(), companyDesc.toStdString()
+                );
+            } else {
+                float hourlyRate = response["hourlyRate"].toDouble(0);
+                
+                currentUser = new Freelancer(
+                    uid.toStdString(), email.toStdString(), name.toStdString(),
+                    description.toStdString(), tags, edu, accomplishments, jobHistory,
+                    hourlyRate
+                );
+            }
+            
+            currentUser->setAuthStatus(true);
+            callback(currentUser, "");
         } else {
             callback(nullptr, response["error"].toString());
         }
@@ -113,7 +146,7 @@ void BackendClient::isHiringManager(const QString& uid, std::function<void(bool)
     request["uid"] = uid;
     
     sendRequest(request, [callback](const QJsonObject& response) {
-        bool isManager = response["isHiringManager"].toBool(false);
+        bool isManager = response["isHiringManager"].toBool();
         callback(isManager);
     });
 }

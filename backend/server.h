@@ -25,7 +25,6 @@ public:
     void stopServer();
     bool getServerStatus() {return running;}
     
-    bool isHiringManager(const std::string &uid);
     void writeData(const std::string &path, const std::string &value);
     void signOut();
 

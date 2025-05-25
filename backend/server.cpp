@@ -8,6 +8,7 @@
 #include <QJsonParseError>
 #include <QString>
 #include <QByteArray>
+#include <QDebug>
 
 Server::Server()
 {
@@ -85,7 +86,7 @@ firebase::auth::User *Server::registerUser(const std::string &email, const std::
                                            std::function<void(firebase::auth::User *, const std::string &error)> callback)
 {
     auto future = auth->CreateUserWithEmailAndPassword(email.c_str(), password.c_str());
-
+    
     future.OnCompletion([this, email, accountType, username, callback](const firebase::Future<firebase::auth::AuthResult> &completed_future)
                         {
         if (completed_future.error() != firebase::auth::kAuthErrorNone) {
@@ -100,6 +101,7 @@ firebase::auth::User *Server::registerUser(const std::string &email, const std::
             // Get a pointer to the user for safe use after this function completes
             const firebase::auth::AuthResult& result = *completed_future.result();
             const firebase::auth::User& user = result.user;
+            
             firebase::auth::User* userPtr = const_cast<firebase::auth::User*>(&user);
             
             if (!userPtr) {
@@ -113,11 +115,54 @@ firebase::auth::User *Server::registerUser(const std::string &email, const std::
             // Use Firestore instead of Realtime Database
             firebase::firestore::DocumentReference userDoc = firestore->Collection("users").Document(uid);
             
+            // Start with common fields for both user types
             firebase::firestore::MapFieldValue userData;
             userData["email"] = firebase::firestore::FieldValue::String(email);
             userData["username"] = firebase::firestore::FieldValue::String(username);
             userData["accountType"] = firebase::firestore::FieldValue::String(accountType);
             userData["createdAt"] = firebase::firestore::FieldValue::ServerTimestamp();
+            userData["description"] = firebase::firestore::FieldValue::String("");
+            
+            // Create empty arrays for common collections
+            std::vector<firebase::firestore::FieldValue, std::allocator<firebase::firestore::FieldValue>> emptyJobHistory;
+            std::vector<firebase::firestore::FieldValue, std::allocator<firebase::firestore::FieldValue>> emptyTags;
+            std::vector<firebase::firestore::FieldValue, std::allocator<firebase::firestore::FieldValue>> emptyAccomplishments;
+            
+            userData["tags"] = firebase::firestore::FieldValue::Array(emptyTags);
+            userData["accomplishments"] = firebase::firestore::FieldValue::Array(emptyAccomplishments);
+            
+            // Create empty education struct
+            firebase::firestore::MapFieldValue education;
+            education["jobTitle"] = firebase::firestore::FieldValue::String("");
+            education["startDate"] = firebase::firestore::FieldValue::String("");
+            education["endDate"] = firebase::firestore::FieldValue::String("");
+            education["description"] = firebase::firestore::FieldValue::String("");
+            
+            userData["education"] = firebase::firestore::FieldValue::Map(education);
+            userData["jobHistory"] = firebase::firestore::FieldValue::Array(emptyJobHistory);
+            
+            // Add user type-specific fields
+            if (accountType == "Hiring Manager") {
+                userData["companyName"] = firebase::firestore::FieldValue::String("");
+                userData["companyDescription"] = firebase::firestore::FieldValue::String("");
+                
+                // Add additional Hiring Manager specific fields
+                std::vector<firebase::firestore::FieldValue, std::allocator<firebase::firestore::FieldValue>> emptyJobPostings;
+                userData["jobPostings"] = firebase::firestore::FieldValue::Array(emptyJobPostings);
+            } else {
+                // For Freelancer
+                userData["hourlyRate"] = firebase::firestore::FieldValue::Double(0.0);
+                
+                // Add additional Freelancer specific fields
+                std::vector<firebase::firestore::FieldValue, std::allocator<firebase::firestore::FieldValue>> emptySkills;
+                userData["skills"] = firebase::firestore::FieldValue::Array(emptySkills);
+                
+                // Freelancer preferences
+                firebase::firestore::MapFieldValue preferences;
+                preferences["remoteOnly"] = firebase::firestore::FieldValue::Boolean(false);
+                preferences["minHourlyRate"] = firebase::firestore::FieldValue::Double(0.0);
+                userData["preferences"] = firebase::firestore::FieldValue::Map(preferences);
+            }
             
             // Wait for firestore write to complete before calling the callback
             auto setDocFuture = userDoc.Set(userData);
@@ -339,20 +384,94 @@ void Server::processRequest(int clientSocket, const std::string &request)
         auto future = auth->SignInWithEmailAndPassword(email.toStdString().c_str(), password.toStdString().c_str());
         future.OnCompletion([this, clientSocket](const firebase::Future<firebase::auth::AuthResult> &completed_future)
                             {
-            QJsonObject response;
+        QJsonObject response;
 
-            if (completed_future.error() != firebase::auth::kAuthErrorNone) {
-                response["status"] = "error";
-                response["error"] = completed_future.error_message();
-            } else {
-                const firebase::auth::AuthResult &result = *completed_future.result();
-                response["status"] = "success";
-                response["uid"] = QString::fromStdString(result.user.uid());
-                response["email"] = QString::fromStdString(result.user.email());
-            }
-
+        if (completed_future.error() != firebase::auth::kAuthErrorNone) {
+            response["status"] = "error";
+            response["error"] = completed_future.error_message();
             QJsonDocument responseDoc(response);
-            sendResponse(clientSocket, responseDoc.toJson(QJsonDocument::Compact).toStdString()); });
+            sendResponse(clientSocket, responseDoc.toJson(QJsonDocument::Compact).toStdString());
+        } else {
+            const firebase::auth::AuthResult &result = *completed_future.result();
+            std::string uid = result.user.uid();
+            
+            // Now fetch the user's data from Firestore
+            firebase::firestore::DocumentReference userDoc = firestore->Collection("users").Document(uid);
+            auto userFuture = userDoc.Get();
+            
+            userFuture.OnCompletion([this, clientSocket, uid, result](const firebase::Future<firebase::firestore::DocumentSnapshot> &future) {
+                QJsonObject response;
+                
+                if (future.error() != firebase::firestore::kErrorOk) {
+                    response["status"] = "error";
+                    response["error"] = future.error_message();
+                } else {
+                    firebase::firestore::DocumentSnapshot snapshot = *future.result();
+                    
+                    if (snapshot.exists()) {
+                        // Create a success response with all user data
+                        response["status"] = "success";
+                        response["uid"] = QString::fromStdString(uid);
+                        response["email"] = QString::fromStdString(result.user.email());
+                        
+                        // Get account type
+                        auto accountType = snapshot.Get("accountType");
+                        if (accountType.is_string()) {
+                            response["isHiringManager"] = (accountType.string_value() == "Hiring Manager");
+                            response["accountType"] = QString::fromStdString(accountType.string_value());
+                        }
+                        
+                        // Get username/name
+                        auto username = snapshot.Get("username");
+                        if (username.is_string()) {
+                            response["name"] = QString::fromStdString(username.string_value());
+                        }
+                        
+                        // Get description if it exists
+                        auto description = snapshot.Get("description");
+                        if (description.is_string()) {
+                            response["description"] = QString::fromStdString(description.string_value());
+                        } else {
+                            response["description"] = "";
+                        }
+                        
+                        // For hiring managers, get company info
+                        if (accountType.is_string() && accountType.string_value() == "Hiring Manager") {
+                            auto companyName = snapshot.Get("companyName");
+                            if (companyName.is_string()) {
+                                response["companyName"] = QString::fromStdString(companyName.string_value());
+                            } else {
+                                response["companyName"] = "";
+                            }
+                            
+                            auto companyDesc = snapshot.Get("companyDescription");
+                            if (companyDesc.is_string()) {
+                                response["companyDescription"] = QString::fromStdString(companyDesc.string_value());
+                            } else {
+                                response["companyDescription"] = "";
+                            }
+                        }
+                        
+                        // For freelancers, get hourly rate
+                        if (accountType.is_string() && accountType.string_value() == "Freelancer") {
+                            auto hourlyRate = snapshot.Get("hourlyRate");
+                            if (hourlyRate.is_double()) {
+                                response["hourlyRate"] = hourlyRate.double_value();
+                            } else {
+                                response["hourlyRate"] = 0.0;
+                            }
+                        }
+                    } else {
+                        // User exists in Auth but not in Firestore
+                        response["status"] = "error";
+                        response["error"] = "User profile not found";
+                    }
+                }
+                
+                QJsonDocument responseDoc(response);
+                sendResponse(clientSocket, responseDoc.toJson(QJsonDocument::Compact).toStdString());
+            });
+        } });
     }
     else if (requestType == "register")
     {
@@ -395,37 +514,6 @@ void Server::processRequest(int clientSocket, const std::string &request)
         QJsonDocument responseDoc(response);
         sendResponse(clientSocket, responseDoc.toJson(QJsonDocument::Compact).toStdString());
     }
-    else if (requestType == "isHiringManager")
-    {
-        QString uid = jsonRequest["uid"].toString();
-        firebase::firestore::DocumentReference ref = firestore->Collection("users").Document(uid.toStdString());
-        auto future = ref.Get();
-
-        future.OnCompletion([this, clientSocket](const firebase::Future<firebase::firestore::DocumentSnapshot> &result)
-                            {
-        QJsonObject response;
-
-        if (result.error() != firebase::firestore::kErrorOk) {
-            response["status"] = "error";
-            response["error"] = result.error_message();
-        } else {
-            firebase::firestore::DocumentSnapshot snapshot = *result.result();
-            response["status"] = "success";
-            if (snapshot.exists()) {
-                auto accountType = snapshot.Get("accountType");
-                if (accountType.is_string()) {
-                    response["isHiringManager"] = (accountType.string_value() == "Hiring Manager");
-                } else {
-                    response["isHiringManager"] = false;
-                }
-            } else {
-                response["isHiringManager"] = false;
-            }
-        }
-
-        QJsonDocument responseDoc(response);
-        sendResponse(clientSocket, responseDoc.toJson(QJsonDocument::Compact).toStdString()); });
-    }
     else
     {
         QJsonObject response;
@@ -457,36 +545,4 @@ void Server::sendResponse(int clientSocket, const std::string &response)
     {
         std::cout << "Response sent successfully" << std::endl;
     }
-}
-
-// Check if user is a HiringManager
-bool Server::isHiringManager(const std::string &uid)
-{
-    // Synchronous approach for simplicity
-    auto docRef = firestore->Collection("users").Document(uid);
-    auto future = docRef.Get();
-
-    // Wait for result (not ideal in production but simpler for this example)
-    while (future.status() == firebase::kFutureStatusPending)
-    {
-        std::this_thread::sleep_for(std::chrono::milliseconds(10));
-    }
-
-    if (future.error() != firebase::firestore::kErrorOk)
-    {
-        std::cerr << "Error getting user type: " << future.error_message() << std::endl;
-        return false;
-    }
-
-    auto result = *future.result();
-    if (!result.exists())
-        return false;
-
-    auto accountType = result.Get("accountType");
-    if (accountType.is_string())
-    {
-        return accountType.string_value() == "Hiring Manager";
-    }
-
-    return false;
 }
