@@ -34,6 +34,7 @@ bool BackendClient::connectToServer(const QString& host, quint16 port) {
     socket->connectToHost(host, port);
     return socket->waitForConnected(5000); // 5 second timeout
 }
+
 void BackendClient::disconnectFromServer() {
     if (connected) {
         // Disconnect any pending signal connections to avoid memory leaks
@@ -88,22 +89,20 @@ void BackendClient::signIn(const QString& email, const QString& password,
     
     sendRequest(request, [this, callback](const QJsonObject& response) {
         if (response["status"].toString() == "success") {
-            // Create the appropriate user type based on response
-            bool isHiringManager = response["isHiringManager"].toBool();
-            
             // Extract user data from response
             QString uid = response["uid"].toString();
             QString email = response["email"].toString();
             QString name = response["name"].toString();
             QString description = response["description"].toString();
+            bool isHiringManager = response["isHiringManager"].toBool();
             
-            // Create basic user data
-            std::vector<std::string> tags;
-            experience edu = {"", "", "", ""};
-            std::vector<std::string> accomplishments;
+            // Create basic user data -- a firestore fetch to be used later
+            std::vector<std::string> tags;  
+            experience edu = {"", "", "", ""};  
+            std::vector<std::string> accomplishments;  
             std::vector<experience> jobHistory;
             
-            // Create the appropriate user object
+            // Create the appropriate user object based on type
             if (isHiringManager) {
                 QString companyName = response["companyName"].toString();
                 QString companyDesc = response["companyDescription"].toString();
@@ -147,7 +146,7 @@ void BackendClient::isHiringManager(const QString& uid, std::function<void(bool)
     request["uid"] = uid;
     
     sendRequest(request, [callback](const QJsonObject& response) {
-        bool isManager = response["isHiringManager"].toBool(false);
+        bool isManager = response["isHiringManager"].toBool();
         callback(isManager);
     });
 }

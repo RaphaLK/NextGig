@@ -8,6 +8,7 @@
 #include <QJsonParseError>
 #include <QString>
 #include <QByteArray>
+#include <QDebug>
 
 Server::Server()
 {
@@ -339,20 +340,94 @@ void Server::processRequest(int clientSocket, const std::string &request)
         auto future = auth->SignInWithEmailAndPassword(email.toStdString().c_str(), password.toStdString().c_str());
         future.OnCompletion([this, clientSocket](const firebase::Future<firebase::auth::AuthResult> &completed_future)
                             {
-            QJsonObject response;
+        QJsonObject response;
 
-            if (completed_future.error() != firebase::auth::kAuthErrorNone) {
-                response["status"] = "error";
-                response["error"] = completed_future.error_message();
-            } else {
-                const firebase::auth::AuthResult &result = *completed_future.result();
-                response["status"] = "success";
-                response["uid"] = QString::fromStdString(result.user.uid());
-                response["email"] = QString::fromStdString(result.user.email());
-            }
-
+        if (completed_future.error() != firebase::auth::kAuthErrorNone) {
+            response["status"] = "error";
+            response["error"] = completed_future.error_message();
             QJsonDocument responseDoc(response);
-            sendResponse(clientSocket, responseDoc.toJson(QJsonDocument::Compact).toStdString()); });
+            sendResponse(clientSocket, responseDoc.toJson(QJsonDocument::Compact).toStdString());
+        } else {
+            const firebase::auth::AuthResult &result = *completed_future.result();
+            std::string uid = result.user.uid();
+            
+            // Now fetch the user's data from Firestore
+            firebase::firestore::DocumentReference userDoc = firestore->Collection("users").Document(uid);
+            auto userFuture = userDoc.Get();
+            
+            userFuture.OnCompletion([this, clientSocket, uid, result](const firebase::Future<firebase::firestore::DocumentSnapshot> &future) {
+                QJsonObject response;
+                
+                if (future.error() != firebase::firestore::kErrorOk) {
+                    response["status"] = "error";
+                    response["error"] = future.error_message();
+                } else {
+                    firebase::firestore::DocumentSnapshot snapshot = *future.result();
+                    
+                    if (snapshot.exists()) {
+                        // Create a success response with all user data
+                        response["status"] = "success";
+                        response["uid"] = QString::fromStdString(uid);
+                        response["email"] = QString::fromStdString(result.user.email());
+                        
+                        // Get account type
+                        auto accountType = snapshot.Get("accountType");
+                        if (accountType.is_string()) {
+                            response["isHiringManager"] = (accountType.string_value() == "Hiring Manager");
+                            response["accountType"] = QString::fromStdString(accountType.string_value());
+                        }
+                        
+                        // Get username/name
+                        auto username = snapshot.Get("username");
+                        if (username.is_string()) {
+                            response["name"] = QString::fromStdString(username.string_value());
+                        }
+                        
+                        // Get description if it exists
+                        auto description = snapshot.Get("description");
+                        if (description.is_string()) {
+                            response["description"] = QString::fromStdString(description.string_value());
+                        } else {
+                            response["description"] = "";
+                        }
+                        
+                        // For hiring managers, get company info
+                        if (accountType.is_string() && accountType.string_value() == "Hiring Manager") {
+                            auto companyName = snapshot.Get("companyName");
+                            if (companyName.is_string()) {
+                                response["companyName"] = QString::fromStdString(companyName.string_value());
+                            } else {
+                                response["companyName"] = "";
+                            }
+                            
+                            auto companyDesc = snapshot.Get("companyDescription");
+                            if (companyDesc.is_string()) {
+                                response["companyDescription"] = QString::fromStdString(companyDesc.string_value());
+                            } else {
+                                response["companyDescription"] = "";
+                            }
+                        }
+                        
+                        // For freelancers, get hourly rate
+                        if (accountType.is_string() && accountType.string_value() == "Freelancer") {
+                            auto hourlyRate = snapshot.Get("hourlyRate");
+                            if (hourlyRate.is_double()) {
+                                response["hourlyRate"] = hourlyRate.double_value();
+                            } else {
+                                response["hourlyRate"] = 0.0;
+                            }
+                        }
+                    } else {
+                        // User exists in Auth but not in Firestore
+                        response["status"] = "error";
+                        response["error"] = "User profile not found";
+                    }
+                }
+                
+                QJsonDocument responseDoc(response);
+                sendResponse(clientSocket, responseDoc.toJson(QJsonDocument::Compact).toStdString());
+            });
+        } });
     }
     else if (requestType == "register")
     {
@@ -395,37 +470,6 @@ void Server::processRequest(int clientSocket, const std::string &request)
         QJsonDocument responseDoc(response);
         sendResponse(clientSocket, responseDoc.toJson(QJsonDocument::Compact).toStdString());
     }
-    else if (requestType == "isHiringManager")
-    {
-        QString uid = jsonRequest["uid"].toString();
-        firebase::firestore::DocumentReference ref = firestore->Collection("users").Document(uid.toStdString());
-        auto future = ref.Get();
-
-        future.OnCompletion([this, clientSocket](const firebase::Future<firebase::firestore::DocumentSnapshot> &result)
-                            {
-        QJsonObject response;
-
-        if (result.error() != firebase::firestore::kErrorOk) {
-            response["status"] = "error";
-            response["error"] = result.error_message();
-        } else {
-            firebase::firestore::DocumentSnapshot snapshot = *result.result();
-            response["status"] = "success";
-            if (snapshot.exists()) {
-                auto accountType = snapshot.Get("accountType");
-                if (accountType.is_string()) {
-                    response["isHiringManager"] = (accountType.string_value() == "Hiring Manager");
-                } else {
-                    response["isHiringManager"] = false;
-                }
-            } else {
-                response["isHiringManager"] = false;
-            }
-        }
-
-        QJsonDocument responseDoc(response);
-        sendResponse(clientSocket, responseDoc.toJson(QJsonDocument::Compact).toStdString()); });
-    }
     else
     {
         QJsonObject response;
@@ -457,36 +501,4 @@ void Server::sendResponse(int clientSocket, const std::string &response)
     {
         std::cout << "Response sent successfully" << std::endl;
     }
-}
-
-// Check if user is a HiringManager
-bool Server::isHiringManager(const std::string &uid)
-{
-    // Synchronous approach for simplicity
-    auto docRef = firestore->Collection("users").Document(uid);
-    auto future = docRef.Get();
-
-    // Wait for result (not ideal in production but simpler for this example)
-    while (future.status() == firebase::kFutureStatusPending)
-    {
-        std::this_thread::sleep_for(std::chrono::milliseconds(10));
-    }
-
-    if (future.error() != firebase::firestore::kErrorOk)
-    {
-        std::cerr << "Error getting user type: " << future.error_message() << std::endl;
-        return false;
-    }
-
-    auto result = *future.result();
-    if (!result.exists())
-        return false;
-
-    auto accountType = result.Get("accountType");
-    if (accountType.is_string())
-    {
-        return accountType.string_value() == "Hiring Manager";
-    }
-
-    return false;
 }

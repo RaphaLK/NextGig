@@ -6,6 +6,7 @@
 #include <QLineEdit>
 #include <QMessageBox>
 #include "client.h"
+#include <iostream>
 
 LoginWindow::LoginWindow(QWidget *parent) : QWidget(parent)
 {
@@ -62,6 +63,7 @@ QWidget *LoginWindow::RenderLoginWindow()
     // Sign in
     client->signIn(email, password, [this](User* user, const QString& error) {
         if (user) {
+          std::cout << "User is a: " << user->getUserType() << endl;
             if (user->getUserType() == User::FREELANCER) {
                 emit freelancerLoginSuccess();
             } else if (user->getUserType() == User::HIRING_MANAGER) {
