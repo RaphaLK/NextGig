@@ -3,12 +3,6 @@
 #include <vector>
 
 using namespace std;
-
-enum UserType
-{
-    FREELANCER,
-    HIRING_MANAGER
-};
 typedef struct experience
 {
     string jobTitle;
@@ -25,13 +19,26 @@ public:
         FREELANCER,
         HIRING_MANAGER
     };
+    typedef struct experience
+    {
+        string jobTitle;
+        string startDate;
+        string endDate;
+        string description;
+    } experience;
+
+    typedef struct education
+    {
+        string school;
+        string degreeLvl;
+    } education;
+
 private:
     string uid;
     string name;
     string email;
     string description;
     vector<string> tags;
-    experience education;
     vector<experience> jobHistory;
     vector<string> accomplishments;
     bool isAuthenticated;
@@ -40,10 +47,10 @@ private:
 public:
     User(string _uid, string _email, string _name,
          string _description, vector<string> _tags,
-         experience _education, vector<string> _accomplishments,
+         vector<string> _accomplishments,
          vector<experience> _jobHistory, UserType _userType) : uid(_uid), email(_email), name(_name),
                                                                description(_description), tags(_tags),
-                                                               education(_education), accomplishments(_accomplishments),
+                                                               accomplishments(_accomplishments),
                                                                jobHistory(_jobHistory), isAuthenticated(false), userType(_userType) {}
 
     virtual ~User();
@@ -54,7 +61,6 @@ public:
     vector<string> getAccomplishments() { return accomplishments; };
     vector<experience> getJobHistory() { return jobHistory; };
     UserType getUserType() const { return userType; }
-
     // auth
     string getUid() const { return uid; }
     string getEmail() const { return email; }

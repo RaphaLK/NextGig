@@ -9,6 +9,7 @@
 #include <QString>
 #include <QByteArray>
 #include <QDebug>
+#include <QJsonArray>
 
 Server::Server()
 {
@@ -86,7 +87,7 @@ firebase::auth::User *Server::registerUser(const std::string &email, const std::
                                            std::function<void(firebase::auth::User *, const std::string &error)> callback)
 {
     auto future = auth->CreateUserWithEmailAndPassword(email.c_str(), password.c_str());
-    
+
     future.OnCompletion([this, email, accountType, username, callback](const firebase::Future<firebase::auth::AuthResult> &completed_future)
                         {
         if (completed_future.error() != firebase::auth::kAuthErrorNone) {
@@ -514,6 +515,138 @@ void Server::processRequest(int clientSocket, const std::string &request)
         QJsonDocument responseDoc(response);
         sendResponse(clientSocket, responseDoc.toJson(QJsonDocument::Compact).toStdString());
     }
+    else if (requestType == "updateProfile")
+    {
+        std::cout << "Processing update profile request" << std::endl;
+        QString uid = jsonRequest["uid"].toString();
+
+        // Get user reference
+        firebase::firestore::DocumentReference userRef = firestore->Collection("users").Document(uid.toStdString());
+
+        // Create update data map
+        firebase::firestore::MapFieldValue updateData;
+
+        // Basic info
+        if (jsonRequest.contains("description"))
+        {
+            updateData["description"] = firebase::firestore::FieldValue::String(
+                jsonRequest["description"].toString().toStdString());
+        }
+
+        if (jsonRequest.contains("hourlyRate"))
+        {
+            updateData["hourlyRate"] = firebase::firestore::FieldValue::Double(
+                jsonRequest["hourlyRate"].toDouble());
+        }
+
+        // Skills
+        if (jsonRequest.contains("skills"))
+        {
+            QJsonArray skillsArray = jsonRequest["skills"].toArray();
+            std::vector<firebase::firestore::FieldValue> skills;
+
+            for (const auto &skill : skillsArray)
+            {
+                skills.push_back(firebase::firestore::FieldValue::String(
+                    skill.toString().toStdString()));
+            }
+
+            updateData["skills"] = firebase::firestore::FieldValue::Array(skills);
+        }
+
+        // Tags
+        if (jsonRequest.contains("tags"))
+        {
+            QJsonArray tagsArray = jsonRequest["tags"].toArray();
+            std::vector<firebase::firestore::FieldValue> tags;
+
+            for (const auto &tag : tagsArray)
+            {
+                tags.push_back(firebase::firestore::FieldValue::String(
+                    tag.toString().toStdString()));
+            }
+
+            updateData["tags"] = firebase::firestore::FieldValue::Array(tags);
+        }
+
+        // Education
+        if (jsonRequest.contains("education"))
+        {
+            QJsonObject educationObj = jsonRequest["education"].toObject();
+            firebase::firestore::MapFieldValue education;
+
+            education["jobTitle"] = firebase::firestore::FieldValue::String(
+                educationObj["jobTitle"].toString().toStdString());
+            education["startDate"] = firebase::firestore::FieldValue::String(
+                educationObj["startDate"].toString().toStdString());
+            education["endDate"] = firebase::firestore::FieldValue::String(
+                educationObj["endDate"].toString().toStdString());
+            education["description"] = firebase::firestore::FieldValue::String(
+                educationObj["description"].toString().toStdString());
+
+            updateData["education"] = firebase::firestore::FieldValue::Map(education);
+        }
+
+        // Accomplishments
+        if (jsonRequest.contains("accomplishments"))
+        {
+            QJsonArray accomplishmentsArray = jsonRequest["accomplishments"].toArray();
+            std::vector<firebase::firestore::FieldValue> accomplishments;
+
+            for (const auto &acc : accomplishmentsArray)
+            {
+                accomplishments.push_back(firebase::firestore::FieldValue::String(
+                    acc.toString().toStdString()));
+            }
+
+            updateData["accomplishments"] = firebase::firestore::FieldValue::Array(accomplishments);
+        }
+
+        // Job history
+        if (jsonRequest.contains("jobHistory"))
+        {
+            QJsonArray jobHistoryArray = jsonRequest["jobHistory"].toArray();
+            std::vector<firebase::firestore::FieldValue> jobHistory;
+
+            for (const auto &jobValue : jobHistoryArray)
+            {
+                QJsonObject jobObj = jobValue.toObject();
+                firebase::firestore::MapFieldValue job;
+
+                job["jobTitle"] = firebase::firestore::FieldValue::String(
+                    jobObj["jobTitle"].toString().toStdString());
+                job["startDate"] = firebase::firestore::FieldValue::String(
+                    jobObj["startDate"].toString().toStdString());
+                job["endDate"] = firebase::firestore::FieldValue::String(
+                    jobObj["endDate"].toString().toStdString());
+                job["description"] = firebase::firestore::FieldValue::String(
+                    jobObj["description"].toString().toStdString());
+
+                jobHistory.push_back(firebase::firestore::FieldValue::Map(job));
+            }
+
+            updateData["jobHistory"] = firebase::firestore::FieldValue::Array(jobHistory);
+        }
+
+        // Update the document in Firestore
+        auto future = userRef.Update(updateData);
+        future.OnCompletion([this, clientSocket](const firebase::Future<void> &future)
+                            {
+            QJsonObject response;
+            
+            if (future.error() != firebase::firestore::kErrorOk) {
+                std::cerr << "Error updating profile: " << future.error_message() << std::endl;
+                response["status"] = "error";
+                response["error"] = QString::fromStdString(future.error_message());
+            } else {
+                std::cout << "Profile updated successfully" << std::endl;
+                response["status"] = "success";
+            }
+            
+            QJsonDocument responseDoc(response);
+            sendResponse(clientSocket, responseDoc.toJson(QJsonDocument::Compact).toStdString()); });
+    }
+
     else
     {
         QJsonObject response;

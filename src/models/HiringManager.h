@@ -12,9 +12,9 @@ private:
 public:
     HiringManager(string _uid, string _email, string _name,
                   string _description, vector<string> _tags,
-                  experience _education, vector<string> _accomplishments,
+                  vector<string> _accomplishments,
                   vector<experience> _jobHistory,
-                  string _companyName, string _companyDescription) : User(_uid, _email, _name, _description, _tags, _education,
+                  string _companyName, string _companyDescription) : User(_uid, _email, _name, _description, _tags,
                                                                           _accomplishments, _jobHistory, User::HIRING_MANAGER),
                                                                      companyName(_companyName), companyDescription(_companyDescription) {}
 

@@ -232,19 +232,19 @@ QWidget* HiringManagerPortal::createProfileTab() {
     });
     
     // Company/User preferences
-    QGroupBox *preferencesGroup = new QGroupBox("Hiring Preferences");
-    QVBoxLayout *preferencesLayout = new QVBoxLayout();
+    // QGroupBox *preferencesGroup = new QGroupBox("Hiring Preferences");
+    // QVBoxLayout *preferencesLayout = new QVBoxLayout();
     
-    QCheckBox *remoteWorkCheck = new QCheckBox("Open to Remote Workers");
-    QCheckBox *intlWorkCheck = new QCheckBox("Open to International Candidates");
-    QCheckBox *entryLevelCheck = new QCheckBox("Consider Entry-Level Candidates");
+    // QCheckBox *remoteWorkCheck = new QCheckBox("Open to Remote Workers");
+    // QCheckBox *intlWorkCheck = new QCheckBox("Open to International Candidates");
+    // QCheckBox *entryLevelCheck = new QCheckBox("Consider Entry-Level Candidates");
     
-    remoteWorkCheck->setChecked(true);
+    // remoteWorkCheck->setChecked(true);
     
-    preferencesLayout->addWidget(remoteWorkCheck);
-    preferencesLayout->addWidget(intlWorkCheck);
-    preferencesLayout->addWidget(entryLevelCheck);
-    preferencesGroup->setLayout(preferencesLayout);
+    // preferencesLayout->addWidget(remoteWorkCheck);
+    // preferencesLayout->addWidget(intlWorkCheck);
+    // preferencesLayout->addWidget(entryLevelCheck);
+    // preferencesGroup->setLayout(preferencesLayout);
     
     // Company/User stats
     QGroupBox *statsGroup = new QGroupBox("Your Statistics");
@@ -264,7 +264,7 @@ QWidget* HiringManagerPortal::createProfileTab() {
     // Arrange everything in the profile tab
     profileLayout->addWidget(infoGroup);
     profileLayout->addWidget(editProfileBtn, 0, Qt::AlignRight);
-    profileLayout->addWidget(preferencesGroup);
+    // profileLayout->addWidget(preferencesGroup);
     profileLayout->addWidget(savePrefsBtn, 0, Qt::AlignRight);
     profileLayout->addWidget(statsGroup);
     profileLayout->addStretch();

@@ -13,6 +13,7 @@
 #include <QGroupBox>
 #include <QTabWidget>
 #include <QMessageBox>
+#include "FreelancerProfileEdit.h"
 
 FreelancerPortal::FreelancerPortal(QWidget *parent) : QWidget(parent), currentUser(nullptr)
 {
@@ -274,7 +275,22 @@ QWidget* FreelancerPortal::createProfileTab() {
     // Edit profile button
     QPushButton *editProfileBtn = new QPushButton("Edit Profile");
     editProfileBtn->setStyleSheet("padding: 8px; background-color: #6c757d; color: white;");
+    connect(editProfileBtn, &QPushButton::clicked, [this]() {
+    if (!currentUser) return;
+
+    // Cast to Freelancer to access Freelancer-specific methods
+    Freelancer* freelancer = dynamic_cast<Freelancer*>(currentUser);
+    if (!freelancer) return;
     
+    FreelancerProfileEdit* dialog = new FreelancerProfileEdit(freelancer, this);
+    
+    connect(dialog, &FreelancerProfileEdit::profileUpdated, [this]() {
+        updateProfileInfo(); // Refresh the UI with updated info
+    });
+    
+    dialog->exec();
+    delete dialog;
+});
     connect(editProfileBtn, &QPushButton::clicked, [this]() {
         QMessageBox::information(this, "Edit Profile", 
                                 "This would open a profile editor dialog.");
