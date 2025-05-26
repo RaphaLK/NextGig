@@ -284,7 +284,7 @@ void FreelancerProfileEdit::saveProfile()
         skillsAndTags.push_back(skillsList->item(i)->text().toStdString());
     }
     
-    // First 5 items are considered tags, the rest are skills
+    // First 5 items are considered tags, the rest are skills --- TODO: Not this
     std::vector<std::string> tags;
     std::vector<std::string> skills;
     
@@ -299,7 +299,6 @@ void FreelancerProfileEdit::saveProfile()
     }
     
     // Clear and update tags
-    // (This is a simplified approach - in a real app, you might want to handle this differently)
     for (const auto& tag : freelancer->getTags()) {
         freelancer->removeTags(tag);
     }

@@ -107,11 +107,46 @@ void BackendClient::signIn(const QString &email, const QString &password,
             QString description = response["description"].toString();
             bool isHiringManager = response["isHiringManager"].toBool();
             
-            // Create basic user data -- a firestore fetch to be used later
-            std::vector<std::string> tags;  
-            User::education edu = {"", ""};  
-            std::vector<std::string> accomplishments;  
-            std::vector<experience> jobHistory;
+            // Parse tags if available
+            std::vector<std::string> tags;
+            if (response.contains("tags") && response["tags"].isArray()) {
+                QJsonArray tagsArray = response["tags"].toArray();
+                for (const auto &tag : tagsArray) {
+                    tags.push_back(tag.toString().toStdString());
+                }
+            }
+            
+            // Parse education if available
+            User::education edu = {"", ""};
+            if (response.contains("education") && response["education"].isObject()) {
+                QJsonObject eduObj = response["education"].toObject();
+                edu.school = eduObj["school"].toString().toStdString();
+                edu.degreeLvl = eduObj["degree_lvl"].toString().toStdString();
+            }
+            
+            // Parse accomplishments if available
+            std::vector<std::string> accomplishments;
+            if (response.contains("accomplishments") && response["accomplishments"].isArray()) {
+                QJsonArray accArray = response["accomplishments"].toArray();
+                for (const auto &acc : accArray) {
+                    accomplishments.push_back(acc.toString().toStdString());
+                }
+            }
+            
+            // Parse job history if available
+            std::vector<User::experience> jobHistory;
+            if (response.contains("jobHistory") && response["jobHistory"].isArray()) {
+                QJsonArray jobArray = response["jobHistory"].toArray();
+                for (const auto &jobValue : jobArray) {
+                    QJsonObject jobObj = jobValue.toObject();
+                    User::experience job;
+                    job.jobTitle = jobObj["jobTitle"].toString().toStdString();
+                    job.startDate = jobObj["startDate"].toString().toStdString();
+                    job.endDate = jobObj["endDate"].toString().toStdString();
+                    job.description = jobObj["description"].toString().toStdString();
+                    jobHistory.push_back(job);
+                }
+            }
             
             // Create the appropriate user object based on type
             if (isHiringManager) {
@@ -120,7 +155,8 @@ void BackendClient::signIn(const QString &email, const QString &password,
                 
                 currentUser = new HiringManager(
                     uid.toStdString(), email.toStdString(), name.toStdString(),
-                    description.toStdString(), tags, accomplishments, jobHistory,
+                    description.toStdString(), tags,
+                    accomplishments, jobHistory,
                     companyName.toStdString(), companyDesc.toStdString()
                 );
             } else {
