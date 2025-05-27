@@ -42,10 +42,11 @@ public:
 
     // User data methods
     void isHiringManager(const QString &uid, std::function<void(bool)> callback);
-
     // Helper for sending/receiving JSON data
     void sendRequest(const QJsonObject &request, std::function<void(const QJsonObject &)> callback);
-
+    
+    void updateFreelancerProfile(Freelancer* freelancer, std::function<void(bool)> callback);
+    void updateHiringManagerProfile(HiringManager* hiringManager, std::function<void(bool)> callback);
 signals:
     void connectionError(const QString &errorMessage);
     void serverResponseReceived(const QJsonObject &response);
