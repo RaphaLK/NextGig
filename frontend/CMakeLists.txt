@@ -32,6 +32,7 @@ add_executable(NextGigFrontend
     client.cpp
     FreelancerProfileEdit.cpp
     UserManager.cpp
+    HiringManagerProfileEdit.cpp
     ../src/models/User.cpp 
 )
 
