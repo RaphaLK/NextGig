@@ -16,6 +16,7 @@
 #include <QScrollArea>
 #include <QMessageBox>
 #include <QSpacerItem>
+#include "HiringManagerProfileEdit.h"
 
 HiringManagerPortal::HiringManagerPortal(QWidget *parent) : QWidget(parent), currentUser(nullptr)
 {
@@ -36,6 +37,13 @@ void HiringManagerPortal::updateProfileInfo() {
     nameLabel->setText(QString::fromStdString(currentUser->getName()));
     emailLabel->setText(QString::fromStdString(currentUser->getEmail()));
     descriptionTextEdit->setPlainText(QString::fromStdString(currentUser->getDescription()));
+    
+    // Handle HiringManager specific fields
+    HiringManager* hiringManager = dynamic_cast<HiringManager*>(currentUser);
+    if (hiringManager) {
+        companyNameLabel->setText(QString::fromStdString(hiringManager->getCompanyName()));
+        companyDescriptionTextEdit->setPlainText(QString::fromStdString(hiringManager->getCompanyDescription()));
+    }
 }
 
 QWidget* HiringManagerPortal::renderHiringManagerPortal() {
@@ -227,24 +235,40 @@ QWidget* HiringManagerPortal::createProfileTab() {
     editProfileBtn->setStyleSheet("background-color: #6c757d; color: white; padding: 8px;");
     
     connect(editProfileBtn, &QPushButton::clicked, [this]() {
-        // In a real app this would open a dialog to edit profile
-        QMessageBox::information(this, "Edit Profile", "This would open a dialog to edit your profile details.");
+        UserManager* userManager = UserManager::getInstance();
+        
+        // Debug info
+        qDebug() << "Edit Profile clicked";
+        qDebug() << "UserManager says user is logged in:" << userManager->isUserLoggedIn();
+        
+        if (currentUser) {
+            qDebug() << "HiringManagerPortal has currentUser:" << QString::fromStdString(currentUser->getName());
+        } else {
+            qDebug() << "HiringManagerPortal currentUser is null";
+        }
+        
+        if (!userManager->isUserLoggedIn()) {
+            QMessageBox::warning(this, "Not Logged In", "You need to be logged in to edit your profile.");
+            return;
+        }
+        HiringManager* hiringManager = userManager->getCurrentHiringManager();
+        if (!hiringManager && currentUser) {
+            hiringManager = dynamic_cast<HiringManager*>(currentUser);
+            if (hiringManager) {
+                // Fix the UserManager if it's out of sync
+                userManager->setCurrentUser(hiringManager);
+            }
+         }
+        // Open the profile edit dialog
+        HiringManagerProfileEdit* dialog = new HiringManagerProfileEdit(hiringManager, this);
+        
+        connect(dialog, &HiringManagerProfileEdit::profileUpdated, [this]() {
+            updateProfileInfo(); // Refresh the UI with updated info
+        });
+        
+        dialog->exec();
+        delete dialog;
     });
-    
-    // Company/User preferences
-    // QGroupBox *preferencesGroup = new QGroupBox("Hiring Preferences");
-    // QVBoxLayout *preferencesLayout = new QVBoxLayout();
-    
-    // QCheckBox *remoteWorkCheck = new QCheckBox("Open to Remote Workers");
-    // QCheckBox *intlWorkCheck = new QCheckBox("Open to International Candidates");
-    // QCheckBox *entryLevelCheck = new QCheckBox("Consider Entry-Level Candidates");
-    
-    // remoteWorkCheck->setChecked(true);
-    
-    // preferencesLayout->addWidget(remoteWorkCheck);
-    // preferencesLayout->addWidget(intlWorkCheck);
-    // preferencesLayout->addWidget(entryLevelCheck);
-    // preferencesGroup->setLayout(preferencesLayout);
     
     // Company/User stats
     QGroupBox *statsGroup = new QGroupBox("Your Statistics");
@@ -616,3 +640,4 @@ QWidget* HiringManagerPortal::createRatingsTab() {
     
     return ratingsWidget;
 }
+

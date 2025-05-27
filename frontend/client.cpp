@@ -330,3 +330,47 @@ void BackendClient::updateFreelancerProfile(Freelancer *freelancer, std::functio
         bool success = (response["status"].toString() == "success");
         callback(success); });
 }
+
+void BackendClient::updateHiringManagerProfile(HiringManager *hiringManager, std::function<void(bool)> callback)
+{
+    QJsonObject request;
+    request["type"] = "updateProfile";
+    request["uid"] = QString::fromStdString(hiringManager->getUid());
+    request["description"] = QString::fromStdString(hiringManager->getDescription());
+    request["companyName"] = QString::fromStdString(hiringManager->getCompanyName());
+    request["companyDescription"] = QString::fromStdString(hiringManager->getCompanyDescription());
+
+    // Add tags
+    QJsonArray tagsArray;
+    for (const auto &tag : hiringManager->getTags())
+    {
+        tagsArray.append(QString::fromStdString(tag));
+    }
+    request["tags"] = tagsArray;
+
+    // Add accomplishments
+    QJsonArray accomplishmentsArray;
+    for (const auto &acc : hiringManager->getAccomplishments())
+    {
+        accomplishmentsArray.append(QString::fromStdString(acc));
+    }
+    request["accomplishments"] = accomplishmentsArray;
+
+    // Add job history
+    QJsonArray jobHistoryArray;
+    for (const auto &job : hiringManager->getJobHistory())
+    {
+        QJsonObject jobObj;
+        jobObj["jobTitle"] = QString::fromStdString(job.jobTitle);
+        jobObj["startDate"] = QString::fromStdString(job.startDate);
+        jobObj["endDate"] = QString::fromStdString(job.endDate);
+        jobObj["description"] = QString::fromStdString(job.description);
+        jobHistoryArray.append(jobObj);
+    }
+    request["jobHistory"] = jobHistoryArray;
+
+    sendRequest(request, [callback](const QJsonObject &response)
+                {
+        bool success = (response["status"].toString() == "success");
+        callback(success); });
+}

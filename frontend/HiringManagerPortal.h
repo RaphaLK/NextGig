@@ -5,7 +5,12 @@
 #include <QTextEdit>
 #include <QCheckBox>
 #include "../src/models/User.h"
-
+#include <QListWidget>
+#include <QLabel>
+#include <QTextEdit>
+#include <QCheckBox>
+#include "../src/models/User.h"
+#include "UserManager.h"
 class HiringManagerPortal : public QWidget {
   Q_OBJECT
 public:
@@ -29,6 +34,8 @@ private:
   QLabel* nameLabel;
   QLabel* emailLabel;
   QTextEdit* descriptionTextEdit;
+  QLabel* companyNameLabel;
+  QTextEdit* companyDescriptionTextEdit;
   
   // User data
   User* currentUser;
