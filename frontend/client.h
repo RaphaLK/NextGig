@@ -39,7 +39,8 @@ public:
 
     void signOut(std::function<void(bool)> callback);
     User *getCurrentUser() { return currentUser; }
-
+    // TODO: Implement
+    void getProfile(const QString &uid, std::function<void(const QJsonObject &)> callback); 
     // User data methods
     void isHiringManager(const QString &uid, std::function<void(bool)> callback);
     // Helper for sending/receiving JSON data

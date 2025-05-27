@@ -69,6 +69,8 @@ public:
 
     // profile set
     void setDescription(string description);
+    void setName(const string &_name) { name = _name; };
+    void setEmail(const string &_email) { email = _email; }
     void addTags(string tag);
     void removeTags(string tag);
     void addAccomplishment(string award);

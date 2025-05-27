@@ -28,7 +28,8 @@ private:
   
   // Helper methods
   void updateProfileInfo();
-  
+  void fetchProfileFromFirebase();
+
   // UI elements that need to be accessed from multiple methods
   QListWidget* postedJobsList;
   QLabel* nameLabel;
@@ -36,7 +37,8 @@ private:
   QTextEdit* descriptionTextEdit;
   QLabel* companyNameLabel;
   QTextEdit* companyDescriptionTextEdit;
-  
+  QListWidget* accomplishmentsList;  
+
   // User data
   User* currentUser;
 

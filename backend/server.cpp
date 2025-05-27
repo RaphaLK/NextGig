@@ -506,6 +506,71 @@ void Server::processRequest(int clientSocket, const std::string &request)
                          sendResponse(clientSocket, responseDoc.toJson(QJsonDocument::Compact).toStdString());
                      });
     }
+    else if (requestType == "getProfile")
+    {
+        QString uid = jsonRequest["uid"].toString();
+
+        // Get user reference
+        firebase::firestore::DocumentReference userRef = firestore->Collection("users").Document(uid.toStdString());
+
+        // Get the document
+        auto future = userRef.Get();
+        future.OnCompletion([this, clientSocket](const firebase::Future<firebase::firestore::DocumentSnapshot> &future)
+        {
+                QJsonObject response;
+
+                if (future.error() != firebase::firestore::kErrorOk)
+                {
+                    response["status"] = "error";
+                    response["error"] = future.error_message();
+                }
+                else
+                {
+                    firebase::firestore::DocumentSnapshot snapshot = *future.result();
+
+                    if (snapshot.exists())
+                    {
+                        // Create a success response with all user data
+                        response["status"] = "success";
+
+                        // Get basic fields
+                        auto name = snapshot.Get("username");
+                        auto email = snapshot.Get("email");
+                        auto description = snapshot.Get("description");
+
+                        if (name.is_string())
+                            response["name"] = QString::fromStdString(name.string_value());
+                        if (email.is_string())
+                            response["email"] = QString::fromStdString(email.string_value());
+                        if (description.is_string())
+                            response["description"] = QString::fromStdString(description.string_value());
+
+                        // Get company fields for hiring manager
+                        auto companyName = snapshot.Get("companyName");
+                        auto companyDesc = snapshot.Get("companyDescription");
+
+                        if (companyName.is_string())
+                            response["companyName"] = QString::fromStdString(companyName.string_value());
+                        if (companyDesc.is_string())
+                            response["companyDescription"] = QString::fromStdString(companyDesc.string_value());
+
+                        // Get arrays (tags, accomplishments)
+                        // ... add code to extract these arrays from Firestore
+
+                        // Get job history
+                        // ... add code to extract job history from Firestore
+                    }
+                    else
+                    {
+                        response["status"] = "error";
+                        response["error"] = "Profile not found";
+                    }
+                }
+
+                QJsonDocument responseDoc(response);
+                sendResponse(clientSocket, responseDoc.toJson(QJsonDocument::Compact).toStdString());
+        });
+    }
     else if (requestType == "signout")
     {
         signOut();
