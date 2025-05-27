@@ -14,17 +14,25 @@
 #include <QTabWidget>
 #include <QMessageBox>
 #include "FreelancerProfileEdit.h"
+#include "UserManager.h"
 
 FreelancerPortal::FreelancerPortal(QWidget *parent) : QWidget(parent), currentUser(nullptr)
 {
     QVBoxLayout *mainLayout = new QVBoxLayout(this);
     mainLayout->addWidget(renderFreelancerPortal());
     setLayout(mainLayout);
+    currentUser = UserManager::getInstance()->getCurrentUser();
+    if (currentUser)
+    {
+        updateProfileInfo();
+    }
 }
 
 void FreelancerPortal::setCurrentUser(User *user)
 {
     currentUser = user;
+    // Also update the UserManager
+    UserManager::getInstance()->setCurrentUser(user);
     updateProfileInfo();
 }
 
@@ -96,6 +104,9 @@ QWidget *FreelancerPortal::renderFreelancerPortal()
         // Logout from server
         client->signOut([this](bool success) {
             if (success) {
+                // Clear the current user in the UserManager
+                UserManager::getInstance()->clearCurrentUser();
+                currentUser = nullptr;
                 emit returnToHomeRequested();
             } else {
                 QMessageBox::warning(this, "Logout Error", 
@@ -285,19 +296,48 @@ QWidget *FreelancerPortal::createProfileTab()
     QPushButton *editProfileBtn = new QPushButton("Edit Profile");
     editProfileBtn->setStyleSheet("padding: 8px; background-color: #6c757d; color: white;");
     connect(editProfileBtn, &QPushButton::clicked, [this]()
-        {
-        Freelancer* freelancer = dynamic_cast<Freelancer*>(currentUser);
-        
-        FreelancerProfileEdit* dialog = new FreelancerProfileEdit(freelancer, this);
-        
-        connect(dialog, &FreelancerProfileEdit::profileUpdated, [this]() {
-            updateProfileInfo(); // Refresh the UI with updated info
-        });
-        
-        dialog->exec();
-        delete dialog; 
+            {
+    UserManager* userManager = UserManager::getInstance();
+    
+    // Debug info
+    qDebug() << "Edit Profile clicked";
+    qDebug() << "UserManager says user is logged in:" << userManager->isUserLoggedIn();
+    
+    if (currentUser) {
+        qDebug() << "FreelancerPortal has currentUser:" << QString::fromStdString(currentUser->getName());
+        qDebug() << "currentUser is Freelancer:" << (dynamic_cast<Freelancer*>(currentUser) != nullptr);
+    } else {
+        qDebug() << "FreelancerPortal currentUser is null";
+    }
+    
+    if (!userManager->isUserLoggedIn()) {
+        QMessageBox::warning(this, "Not Logged In", "You need to be logged in to edit your profile.");
+        return;
+    }
+    
+    // Try using local currentUser if UserManager's user is not valid
+    Freelancer* freelancer = userManager->getCurrentFreelancer();
+    if (!freelancer && currentUser) {
+        freelancer = dynamic_cast<Freelancer*>(currentUser);
+        if (freelancer) {
+            // Fix the UserManager if it's out of sync
+            userManager->setCurrentUser(freelancer);
+        }
+    }
+    
+    if (!freelancer) {
+        QMessageBox::warning(this, "Invalid User Type", "Only freelancer accounts can edit this profile.");
+        return;
+    }
+    
+    FreelancerProfileEdit* dialog = new FreelancerProfileEdit(freelancer, this);
+    
+    connect(dialog, &FreelancerProfileEdit::profileUpdated, [this]() {
+        updateProfileInfo(); // Refresh the UI with updated info
     });
-
+    
+    dialog->exec();
+    delete dialog; });
     // Arrange everything in the profile tab
     profileLayout->addWidget(userInfoGroup);
     profileLayout->addWidget(skillsGroup);

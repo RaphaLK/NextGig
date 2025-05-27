@@ -7,6 +7,7 @@
 #include <QMessageBox>
 #include "client.h"
 #include <iostream>
+#include "UserManager.h"
 
 LoginWindow::LoginWindow(QWidget *parent) : QWidget(parent)
 {
@@ -69,6 +70,8 @@ QWidget *LoginWindow::RenderLoginWindow()
             } else if (user->getUserType() == User::HIRING_MANAGER) {
                 emit hiringManagerLoginSuccess();
             }
+            UserManager::getInstance()->setCurrentUser(user);
+
         } else {
             QMessageBox::warning(this, "Login Error", "Invalid email or password: " + error);
         }
