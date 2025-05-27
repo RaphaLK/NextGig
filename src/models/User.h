@@ -53,6 +53,11 @@ public:
                                                                accomplishments(_accomplishments),
                                                                jobHistory(_jobHistory), isAuthenticated(false), userType(_userType) {}
 
+    User() : uid(""), email(""), name(""), description(""),
+             tags(std::vector<string>()), accomplishments(std::vector<string>()),
+             jobHistory(std::vector<experience>()), isAuthenticated(false),
+             userType(FREELANCER) {}
+
     virtual ~User();
     // profile get
     string getName() { return name; };
@@ -68,9 +73,11 @@ public:
     void setAuthStatus(bool status) { isAuthenticated = status; }
 
     // profile set
+    void setUid(string _uid) { uid = _uid; }
     void setDescription(string description);
     void setName(const string &_name) { name = _name; };
     void setEmail(const string &_email) { email = _email; }
+    void setUserType(UserType userType) { this->userType = userType; }
     void addTags(string tag);
     void removeTags(string tag);
     void addAccomplishment(string award);

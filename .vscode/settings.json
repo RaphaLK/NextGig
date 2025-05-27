@@ -73,6 +73,7 @@
     "csignal": "cpp",
     "qmessagebox": "cpp",
     "qjsonarray": "cpp",
-    "qlineedit": "cpp"
+    "qlineedit": "cpp",
+    "qdebug": "cpp"
   }
 }

@@ -554,12 +554,9 @@ void Server::processRequest(int clientSocket, const std::string &request)
                         if (companyDesc.is_string())
                             response["companyDescription"] = QString::fromStdString(companyDesc.string_value());
 
-                        // Get arrays (tags, accomplishments)
-                        // ... add code to extract these arrays from Firestore
+                        // Get arrays (tags, accomplishments) TODO:
 
-                        // Get job history
-                        // ... add code to extract job history from Firestore
-                    }
+                        // Get job history TODO:                    }
                     else
                     {
                         response["status"] = "error";
@@ -569,6 +566,7 @@ void Server::processRequest(int clientSocket, const std::string &request)
 
                 QJsonDocument responseDoc(response);
                 sendResponse(clientSocket, responseDoc.toJson(QJsonDocument::Compact).toStdString());
+            }
         });
     }
     else if (requestType == "signout")
@@ -711,7 +709,159 @@ void Server::processRequest(int clientSocket, const std::string &request)
             QJsonDocument responseDoc(response);
             sendResponse(clientSocket, responseDoc.toJson(QJsonDocument::Compact).toStdString()); });
     }
+    // —————————————
+    // ADD A JOB
+    // —————————————
+    if (requestType == "addJob")
+    {
+        // pull fields out of the incoming JSON
+        QString title = jsonRequest["jobTitle"].toString();
+        QString desc = jsonRequest["jobDescription"].toString();
+        int pay = jsonRequest["pay"].toInt();
+        QString uid = jsonRequest["uid"].toString();
+        QJsonArray skillsArray = jsonRequest["requiredSkills"].toArray();
 
+        // build the Firestore map
+        firebase::firestore::MapFieldValue jobData;
+        jobData["JobTitle"] = firebase::firestore::FieldValue::String(title.toStdString());
+        jobData["jobDescription"] = firebase::firestore::FieldValue::String(desc.toStdString());
+        jobData["pay"] = firebase::firestore::FieldValue::Integer(pay);
+        jobData["date_created"] = firebase::firestore::FieldValue::Timestamp(firebase::Timestamp::Now());
+        jobData["uid"] = firebase::firestore::FieldValue::String(uid.toStdString());
+
+        // convert QJsonArray → std::vector<FieldValue>
+        std::vector<firebase::firestore::FieldValue> fvSkills;
+        for (auto v : skillsArray)
+        {
+            if (v.isString())
+            {
+                fvSkills.push_back(
+                    firebase::firestore::FieldValue::String(v.toString().toStdString()));
+            }
+        }
+        jobData["requiredSkills"] =
+            firebase::firestore::FieldValue::Array(std::move(fvSkills));
+
+        // fire the add
+        auto future = firestore
+                          ->Collection("jobs")
+                          .Add(std::move(jobData));
+
+        future.OnCompletion(
+            [this, clientSocket](const firebase::Future<firebase::firestore::DocumentReference> &f)
+            {
+                QJsonObject resp;
+                if (f.error() == firebase::firestore::kErrorOk)
+                {
+                    resp["status"] = "success";
+                    resp["jobId"] = QString::fromStdString(f.result()->id());
+                }
+                else
+                {
+                    resp["status"] = "error";
+                    resp["error"] = QString::fromUtf8(f.error_message());
+                }
+                sendResponse(clientSocket,
+                             QJsonDocument(resp)
+                                 .toJson(QJsonDocument::Compact)
+                                 .toStdString());
+            });
+    }
+    // —————————————
+    // GET ALL JOBS
+    // —————————————
+    else if (requestType == "getJobs")
+    {
+        auto future = firestore->Collection("jobs").Get();
+        future.OnCompletion(
+            [this, clientSocket](const firebase::Future<firebase::firestore::QuerySnapshot> &f)
+            {
+                QJsonObject resp;
+                if (f.error() != firebase::firestore::kErrorOk)
+                {
+                    resp["status"] = "error";
+                    resp["error"] = QString::fromUtf8(f.error_message());
+                }
+                else
+                {
+                    resp["status"] = "success";
+                    QJsonArray jobsArr;
+
+                    for (auto const &doc : f.result()->documents())
+                    {
+                        QJsonObject jobObj;
+                        jobObj["jobId"] = QString::fromStdString(doc.id());
+
+                        auto data = doc.GetData();
+                        jobObj["jobTitle"] = QString::fromStdString(data["JobTitle"].string_value());
+                        jobObj["jobDescription"] = QString::fromStdString(data["jobDescription"].string_value());
+                        jobObj["pay"] = int(data["pay"].integer_value());
+                        jobObj["uid"] = QString::fromStdString(data["uid"].string_value());
+
+                        // requiredSkills (array)
+                        QJsonArray skillsJson;
+                        for (auto const &fv : data["requiredSkills"].array_value())
+                        {
+                            skillsJson.append(QString::fromStdString(fv.string_value()));
+                        }
+                        jobObj["requiredSkills"] = skillsJson;
+
+                        jobsArr.append(jobObj);
+                    }
+
+                    resp["jobs"] = jobsArr;
+                }
+
+                sendResponse(clientSocket,
+                             QJsonDocument(resp)
+                                 .toJson(QJsonDocument::Compact)
+                                 .toStdString());
+            });
+    }
+    // —————————————
+    // DELETE A JOB
+    // —————————————
+    else if (requestType == "deleteJob")
+    {
+        QString jobId = jsonRequest["jobId"].toString();
+        if (jobId.isEmpty())
+        {
+            QJsonObject err;
+            err["status"] = "error";
+            err["error"] = "deleteJob requires a jobId";
+            sendResponse(clientSocket,
+                         QJsonDocument(err)
+                             .toJson(QJsonDocument::Compact)
+                             .toStdString());
+        }
+        else
+        {
+            auto future = firestore
+                              ->Collection("jobs")
+                              .Document(jobId.toStdString())
+                              .Delete();
+
+            future.OnCompletion(
+                [this, clientSocket, jobId](const firebase::Future<void> &f)
+                {
+                    QJsonObject resp;
+                    if (f.error() == firebase::firestore::kErrorOk)
+                    {
+                        resp["status"] = "success";
+                        resp["deletedId"] = jobId;
+                    }
+                    else
+                    {
+                        resp["status"] = "error";
+                        resp["error"] = QString::fromUtf8(f.error_message());
+                    }
+                    sendResponse(clientSocket,
+                                 QJsonDocument(resp)
+                                     .toJson(QJsonDocument::Compact)
+                                     .toStdString());
+                });
+        }
+    }
     else
     {
         QJsonObject response;
@@ -721,8 +871,8 @@ void Server::processRequest(int clientSocket, const std::string &request)
         QJsonDocument responseDoc(response);
         sendResponse(clientSocket, responseDoc.toJson(QJsonDocument::Compact).toStdString());
     }
+    
 }
-
 void Server::sendResponse(int clientSocket, const std::string &response)
 {
     // Add newline as message terminator

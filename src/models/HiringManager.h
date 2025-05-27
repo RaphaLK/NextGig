@@ -15,8 +15,11 @@ public:
                   vector<string> _accomplishments,
                   vector<experience> _jobHistory,
                   string _companyName = "", string _companyDescription = "") : User(_uid, _email, _name, _description, _tags,
-                                                                          _accomplishments, _jobHistory, User::HIRING_MANAGER),
-                                                                     companyName(_companyName), companyDescription(_companyDescription) {}
+                                                                                    _accomplishments, _jobHistory, User::HIRING_MANAGER),
+                                                                               companyName(_companyName), companyDescription(_companyDescription) {}
+    HiringManager() : User(), companyName(""), companyDescription("") {
+        User::setUserType(User::HIRING_MANAGER);
+    }
 
     std::string getCompanyName() const { return companyName; }
     std::string getCompanyDescription() const { return companyDescription; }

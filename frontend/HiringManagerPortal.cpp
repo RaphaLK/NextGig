@@ -21,6 +21,7 @@
 #include <QJsonObject>
 #include <QJsonDocument>
 #include <QJsonValue>
+#include "UserManager.h"
 
 HiringManagerPortal::HiringManagerPortal(QWidget *parent) : QWidget(parent), currentUser(nullptr)
 {
@@ -287,14 +288,24 @@ QWidget *HiringManagerPortal::createProfileTab()
     QGroupBox *infoGroup = new QGroupBox("Company Information");
     QFormLayout *infoLayout = new QFormLayout();
 
-    nameLabel = new QLabel("");
-    emailLabel = new QLabel("email@example.com");
+    UserManager *userManager = UserManager::getInstance();
+    HiringManager* hiringManager = userManager->getCurrentHiringManager();
+
+    // Create default labels
+    QLabel* nameLabel = new QLabel("Please log in");
+    QLabel* emailLabel = new QLabel("");
     descriptionTextEdit = new QTextEdit();
     descriptionTextEdit->setReadOnly(true);
     descriptionTextEdit->setMaximumHeight(100);
-
-    companyNameLabel = new QLabel("Loading...");
-
+    companyNameLabel = new QLabel("");
+    
+    // Only try to populate them if we have a hiring manager
+    if (hiringManager) {
+        nameLabel->setText(QString::fromStdString(hiringManager->getName()));
+        emailLabel->setText(QString::fromStdString(hiringManager->getEmail()));
+        descriptionTextEdit->setText(QString::fromStdString(hiringManager->getCompanyDescription()));
+        companyNameLabel->setText(QString::fromStdString(hiringManager->getCompanyName()));
+    }
     infoLayout->addRow("Name:", nameLabel);
     infoLayout->addRow("Email:", emailLabel);
     infoLayout->addRow("Company Description:", descriptionTextEdit);
