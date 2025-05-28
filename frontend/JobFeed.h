@@ -22,7 +22,8 @@ public:
     
     // Call this to refresh the job list
     void refreshJobs();
-    
+    void updateJobList(const std::vector<Job> &jobs);
+
 private slots:
     // Handles job selection in the list
     void onJobSelected(QListWidgetItem* current, QListWidgetItem* previous);
@@ -60,4 +61,5 @@ private:
     void applyToJob();
     void onAddJobClicked();
     void displayFilteredJobs();
+
 };

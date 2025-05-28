@@ -42,14 +42,15 @@ void FreelancerPortal::updateProfileInfo()
     if (!currentUser)
         return;
 
+    Freelancer *currentUser = UserManager::getInstance()->getCurrentFreelancer();;
     nameLabel->setText(QString::fromStdString(currentUser->getName()));
     descriptionTextEdit->setPlainText(QString::fromStdString(currentUser->getDescription()));
 
     // Update tags/skills
     skillsListWidget->clear();
-    for (const auto &tag : currentUser->getTags())
+    for (const auto &skill : currentUser->getSkills())
     {
-        skillsListWidget->addItem(QString::fromStdString(tag));
+        skillsListWidget->addItem(QString::fromStdString(skill));
     }
 
     // Update job history

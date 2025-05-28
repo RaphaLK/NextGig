@@ -294,29 +294,17 @@ void FreelancerProfileEdit::saveProfile()
     for (int i = 0; i < skillsList->count(); ++i) {
         skillsAndTags.push_back(skillsList->item(i)->text().toStdString());
     }
-    
-    // First 5 items are considered tags, the rest are skills
+
     std::vector<std::string> tags;
     std::vector<std::string> skills;
     
     int count = 0;
     for (const auto& item : skillsAndTags) {
-        if (count < 5) {
-            tags.push_back(item);
-        } else {
-            skills.push_back(item);
-        }
+        skills.push_back(item);
+        
         count++;
     }
     
-    // Clear and update tags
-    for (const auto& tag : currUser->getTags()) {
-        currUser->removeTags(tag);
-    }
-    
-    for (const auto& tag : tags) {
-        currUser->addTags(tag);
-    }
     
     // Update skills
     currUser->getSkills().clear();

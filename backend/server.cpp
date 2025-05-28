@@ -462,6 +462,41 @@ void Server::processRequest(int clientSocket, const std::string &request)
                                 response["hourlyRate"] = "0";
                             }
                         }
+                        auto skillsField = snapshot.Get("skills");
+                        if (skillsField.is_array()) {
+                            QJsonArray skillsArray;
+                            for (const auto& skill : skillsField.array_value()) {
+                                if (skill.is_string()) {
+                                    skillsArray.append(QString::fromStdString(skill.string_value()));
+                                }
+                            }
+                            response["skills"] = skillsArray;
+                        } else {
+                            response["skills"] = QJsonArray(); // Empty array if no skills found
+                        }
+                        
+                        // Add education object to the response
+                        auto educationField = snapshot.Get("education");
+                        if (educationField.is_map()) {
+                            QJsonObject educationObj;
+                            auto eduMap = educationField.map_value();
+                            
+                            auto school = eduMap.find("school");
+                            if (school != eduMap.end() && school->second.is_string()) {
+                                educationObj["school"] = QString::fromStdString(school->second.string_value());
+                            } else {
+                                educationObj["school"] = "";
+                            }
+                            
+                            auto degreeLvl = eduMap.find("degree_lvl");
+                            if (degreeLvl != eduMap.end() && degreeLvl->second.is_string()) {
+                                educationObj["degree_lvl"] = QString::fromStdString(degreeLvl->second.string_value());
+                            } else {
+                                educationObj["degree_lvl"] = "";
+                            }
+                            
+                            response["education"] = educationObj;
+                        }
                     } else {
                         // User exists in Auth but not in Firestore
                         response["status"] = "error";

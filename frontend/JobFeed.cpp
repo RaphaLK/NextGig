@@ -154,6 +154,22 @@ void JobFeed::loadJobs()
         }
         
         allJobs = jobs;
+
+        if(!showApplyButtons)
+        {
+            std::string currentUid = UserManager::getInstance()->getCurrentHiringManager()->getName();
+
+            std::vector<Job> filteredJobs;
+            for (const auto &job : allJobs)
+            {
+                if (job.getEmployer() == currentUid) // Ensure Job class has getEmployerUid()
+                {
+                    filteredJobs.push_back(job);
+                }
+            }
+            allJobs = filteredJobs;
+        }
+
         displayFilteredJobs();
  });
 }
@@ -379,4 +395,5 @@ void JobFeed::addJob()
 
 void JobFeed::applyToJob()
 {
+
 }
