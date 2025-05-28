@@ -67,30 +67,67 @@ void JobFeed::setupUI()
   detailsGroup = new QGroupBox("Job Details");
   QVBoxLayout *detailsLayout = new QVBoxLayout();
 
+  // Create a scroll area for details to handle longer content
+  QScrollArea *detailsScrollArea = new QScrollArea();
+  detailsScrollArea->setWidgetResizable(true);
+  detailsScrollArea->setFrameShape(QFrame::NoFrame);
+
+  QWidget *detailsContent = new QWidget();
+  QVBoxLayout *detailsContentLayout = new QVBoxLayout(detailsContent);
+
+  // Job title with improved styling
   jobTitleLabel = new QLabel("Select a job to view details");
-  jobTitleLabel->setStyleSheet("font-weight: bold; font-size: 16px;");
+  jobTitleLabel->setStyleSheet("font-weight: bold; font-size: 18px; color: #2c3e50; padding: 5px 0;");
+  jobTitleLabel->setWordWrap(true);
+
+  // Create card-like container for job metadata
+  QFrame *metadataFrame = new QFrame();
+  metadataFrame->setStyleSheet("background-color: #f8f9fa; border-radius: 8px; padding: 10px;");
+  QVBoxLayout *metadataLayout = new QVBoxLayout(metadataFrame);
+
+  // Use icons or better formatting for employer and payment
+  employerLabel = new QLabel();
+  employerLabel->setStyleSheet("font-size: 14px; color: #34495e;");
+
+  paymentLabel = new QLabel();
+  paymentLabel->setStyleSheet("font-size: 14px; color: #34495e; font-weight: bold;");
+
+  QLabel *descHeader = new QLabel("Description");
+  descHeader->setStyleSheet("font-weight: bold; font-size: 16px; color: #2c3e50; margin-top: 15px;");
 
   jobDescriptionLabel = new QLabel();
   jobDescriptionLabel->setWordWrap(true);
   jobDescriptionLabel->setTextFormat(Qt::RichText);
+  jobDescriptionLabel->setStyleSheet("line-height: 150%; color: #34495e; background-color: #f8f9fa; padding: 12px; border-radius: 8px;");
 
-  employerLabel = new QLabel();
-  paymentLabel = new QLabel();
+  // Skills section with tags-like appearance
+  QLabel *skillsHeader = new QLabel("Required Skills");
+  skillsHeader->setStyleSheet("font-weight: bold; font-size: 16px; color: #2c3e50; margin-top: 15px;");
+
   skillsLabel = new QLabel();
+  skillsLabel->setWordWrap(true);
+  skillsLabel->setStyleSheet("padding: 8px;");
 
-  detailsLayout->addWidget(jobTitleLabel);
-  detailsLayout->addWidget(employerLabel);
-  detailsLayout->addWidget(paymentLabel);
-  detailsLayout->addWidget(new QLabel("Description:"));
-  detailsLayout->addWidget(jobDescriptionLabel);
-  detailsLayout->addWidget(new QLabel("Required Skills:"));
-  detailsLayout->addWidget(skillsLabel);
+  // Add all components to the layout
+  metadataLayout->addWidget(employerLabel);
+  metadataLayout->addWidget(paymentLabel);
+
+  detailsContentLayout->addWidget(jobTitleLabel);
+  detailsContentLayout->addWidget(metadataFrame);
+  detailsContentLayout->addWidget(descHeader);
+  detailsContentLayout->addWidget(jobDescriptionLabel);
+  detailsContentLayout->addWidget(skillsHeader);
+  detailsContentLayout->addWidget(skillsLabel);
+  detailsContentLayout->addStretch();
+
+  detailsScrollArea->setWidget(detailsContent);
+  detailsLayout->addWidget(detailsScrollArea);
 
   // Only show apply button for freelancers
   if (showApplyButtons)
   {
     applyButton = new QPushButton("Apply for Job");
-    applyButton->setStyleSheet("background-color: #007bff; color: white; padding: 8px; font-weight: bold;");
+    applyButton->setStyleSheet("background-color: #007bff; color: white; padding: 12px; font-weight: bold; border-radius: 4px; font-size: 14px;");
     applyButton->setEnabled(false); // Disabled until a job is selected
     detailsLayout->addWidget(applyButton);
 
@@ -170,8 +207,7 @@ void JobFeed::loadJobs()
             allJobs = filteredJobs;
         }
 
-        displayFilteredJobs();
- });
+        displayFilteredJobs(); });
 }
 
 void JobFeed::displayFilteredJobs()
@@ -234,99 +270,108 @@ void JobFeed::displayFilteredJobs()
 
 void JobFeed::onJobSelected(QListWidgetItem *current, QListWidgetItem *previous)
 {
-    if (!current) {
-        detailsGroup->setVisible(false);
-        currentJobId = "";
-        if (showApplyButtons && applyButton) {
-            applyButton->setEnabled(false);
-        }
-        return;
+  if (!current)
+  {
+    detailsGroup->setVisible(false);
+    currentJobId = "";
+    if (showApplyButtons && applyButton)
+    {
+      applyButton->setEnabled(false);
     }
+    return;
+  }
 
-    // Get job ID from the item's data
-    QString jobId = current->data(Qt::UserRole).toString();
-    currentJobId = jobId.toStdString();
-    
-    // Find the job in the filtered jobs list
-    const Job* selectedJob = nullptr;
-    for (const auto& job : filteredJobs) {
-        if (job.getJobId() == currentJobId) {
-            selectedJob = &job;
-            break;
-        }
+  // Get job ID from the item's data
+  QString jobId = current->data(Qt::UserRole).toString();
+  currentJobId = jobId.toStdString();
+
+  // Find the job in the filtered jobs list
+  const Job *selectedJob = nullptr;
+  for (const auto &job : filteredJobs)
+  {
+    if (job.getJobId() == currentJobId)
+    {
+      selectedJob = &job;
+      break;
     }
-    
-    if (!selectedJob) {
-        qDebug() << "JobFeed: Job not found for ID:" << jobId;
-        detailsGroup->setVisible(false);
-        return;
-    }
-    
+  }
+
+  if (selectedJob)
+  {
     // Update the detail view with job info
     jobTitleLabel->setText(QString::fromStdString(selectedJob->getJobTitle()));
     jobDescriptionLabel->setText(QString::fromStdString(selectedJob->getJobDescription()));
-    employerLabel->setText("Employer: " + QString::fromStdString(selectedJob->getEmployer()));
-    paymentLabel->setText("Payment: $" + QString::fromStdString(selectedJob->getPayment()));
-    
-    // Format skills list
+    employerLabel->setText(QString("👤 Employer: %1").arg(QString::fromStdString(selectedJob->getEmployer())));
+    paymentLabel->setText(QString("💰 Payment: $%1").arg(QString::fromStdString(selectedJob->getPayment())));
+
+    // Format skills list as tags
     QString skillsText;
-    const auto& skills = selectedJob->getRequiredSkills();
-    for (size_t i = 0; i < skills.size(); ++i) {
-        if (i > 0) skillsText += ", ";
-        skillsText += QString::fromStdString(skills[i]);
+    const auto &skills = selectedJob->getRequiredSkills();
+    for (size_t i = 0; i < skills.size(); ++i)
+    {
+      QString skillTag = QString("<span style='background-color: #e9ecef; color: #495057; padding: 5px 10px; margin: 3px; border-radius: 15px; display: inline-block;'>%1</span>")
+                             .arg(QString::fromStdString(skills[i]));
+      skillsText += skillTag + " ";
     }
     skillsLabel->setText(skillsText);
-    
+
     // Show the details group and enable apply button
     detailsGroup->setVisible(true);
-    if (showApplyButtons && applyButton) {
-        applyButton->setEnabled(true);
+    if (showApplyButtons && applyButton)
+    {
+      applyButton->setEnabled(true);
     }
+  }
 }
 
 void JobFeed::applyFilters()
 {
-  if (allJobs.empty()) {
+  if (allJobs.empty())
+  {
     qDebug() << "JobFeed: No jobs to filter, reloading jobs first";
     loadJobs();
     return;
   }
-  
+
   displayFilteredJobs();
 }
 
 void JobFeed::onApplyClicked()
 {
-    if (currentJobId.empty()) {
-        QMessageBox::warning(this, "Error", "Please select a job first");
-        return;
-    }
+  if (currentJobId.empty())
+  {
+    QMessageBox::warning(this, "Error", "Please select a job first");
+    return;
+  }
 
-    // Check if user is logged in
-    UserManager *userManager = UserManager::getInstance();
-    // Add null checks before attempting to access the user
-    if (!userManager->isUserLoggedIn() || !userManager->getCurrentFreelancer()) {
-        QMessageBox::warning(this, "Login Required", "You must be logged in as a freelancer to apply for jobs");
-        return;
-    }
+  // Check if user is logged in
+  UserManager *userManager = UserManager::getInstance();
+  // Add null checks before attempting to access the user
+  if (!userManager->isUserLoggedIn() || !userManager->getCurrentFreelancer())
+  {
+    QMessageBox::warning(this, "Login Required", "You must be logged in as a freelancer to apply for jobs");
+    return;
+  }
 
-    // Confirm application
-    QMessageBox::StandardButton confirm = QMessageBox::question(
-        this, "Confirm Application", 
-        "Are you sure you want to apply for this job?",
-        QMessageBox::Yes | QMessageBox::No);
-    
-    if (confirm == QMessageBox::Yes) {
-        // In a real app, you'd call your backend to submit the application
-        // For now, we'll just show a success message
-        QMessageBox::information(this, "Application Submitted", 
-                                "Your application has been submitted successfully!");
-        
-        // Disable the apply button to prevent multiple applications
-        if (applyButton) {
-            applyButton->setEnabled(false);
-        }
+  // Confirm application
+  QMessageBox::StandardButton confirm = QMessageBox::question(
+      this, "Confirm Application",
+      "Are you sure you want to apply for this job?",
+      QMessageBox::Yes | QMessageBox::No);
+
+  if (confirm == QMessageBox::Yes)
+  {
+    // In a real app, you'd call your backend to submit the application
+    // For now, we'll just show a success message
+    QMessageBox::information(this, "Application Submitted",
+                             "Your application has been submitted successfully!");
+
+    // Disable the apply button to prevent multiple applications
+    if (applyButton)
+    {
+      applyButton->setEnabled(false);
     }
+  }
 }
 
 void JobFeed::refreshJobs()
@@ -395,5 +440,4 @@ void JobFeed::addJob()
 
 void JobFeed::applyToJob()
 {
-
 }
