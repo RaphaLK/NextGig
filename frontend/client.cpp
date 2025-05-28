@@ -158,8 +158,71 @@ void BackendClient::signIn(const QString &email, const QString &password,
             } else {
                 // Create Freelancer object and populate similarly
                 Freelancer* freelancer = new Freelancer();
-
                 
+                // MISSING CODE: You need to set UID and basic fields for Freelancer too!
+                freelancer->setUid(response["uid"].toString().toStdString());
+                freelancer->setEmail(response["email"].toString().toStdString());
+                freelancer->setName(response.value("username").toString().toStdString());
+                
+                // Same field processing as for HiringManager for common fields
+                if (response.contains("name")) {
+                    freelancer->setName(response["name"].toString().toStdString());
+                }
+                if (response.contains("description")) {
+                    freelancer->setDescription(response["description"].toString().toStdString());
+                }
+                
+                // Parse Freelancer-specific fields
+                if (response.contains("hourlyRate")) {
+                    freelancer->setHourlyRate(response["hourlyRate"].toDouble());
+                }
+                
+                // Parse education if available
+                if (response.contains("education") && response["education"].isObject()) {
+                    QJsonObject eduObj = response["education"].toObject();
+                    User::education edu;
+                    edu.school = eduObj["school"].toString().toStdString();
+                    edu.degreeLvl = eduObj["degree_lvl"].toString().toStdString();
+                    freelancer->setEducation(edu);
+                }
+                
+                // Parse skills if available
+                if (response.contains("skills") && response["skills"].isArray()) {
+                    QJsonArray skillsArray = response["skills"].toArray();
+                    for (const auto &skill : skillsArray) {
+                        freelancer->addSkill(skill.toString().toStdString());
+                    }
+                }
+                
+                // Parse tags (same as for HiringManager)
+                if (response.contains("tags") && response["tags"].isArray()) {
+                    QJsonArray tagsArray = response["tags"].toArray();
+                    for (const auto &tag : tagsArray) {
+                        freelancer->addTags(tag.toString().toStdString());
+                    }
+                }
+                
+                // Parse accomplishments (same as for HiringManager)
+                if (response.contains("accomplishments") && response["accomplishments"].isArray()) {
+                    QJsonArray accArray = response["accomplishments"].toArray();
+                    for (const auto &acc : accArray) {
+                        freelancer->addAccomplishment(acc.toString().toStdString());
+                    }
+                }
+                
+                // Parse job history (same as for HiringManager)
+                if (response.contains("jobHistory") && response["jobHistory"].isArray()) {
+                    QJsonArray jobArray = response["jobHistory"].toArray();
+                    for (const auto &jobValue : jobArray) {
+                        QJsonObject jobObj = jobValue.toObject();
+                        freelancer->addJobHistory(
+                            jobObj["jobTitle"].toString().toStdString(),
+                            jobObj["startDate"].toString().toStdString(),
+                            jobObj["endDate"].toString().toStdString(),
+                            jobObj["description"].toString().toStdString()
+                        );
+                    }
+                }
                 user = freelancer;
             }
             
@@ -272,6 +335,16 @@ void BackendClient::onReadyRead()
 
 void BackendClient::updateFreelancerProfile(Freelancer *freelancer, std::function<void(bool)> callback)
 {
+    if (!freelancer || freelancer->getUid().empty()) {
+        qDebug() << "Error: Cannot update profile with empty UID";
+        if (callback) {
+            callback(false);
+        }
+        return;
+    }
+    
+    qDebug() << "Updating freelancer profile for UID:" << QString::fromStdString(freelancer->getUid());
+    
     QJsonObject request;
     request["type"] = "updateProfile";
     request["uid"] = QString::fromStdString(freelancer->getUid());

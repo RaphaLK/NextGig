@@ -65,6 +65,22 @@ void UserManager::setCurrentUser(User *user)
 
 void UserManager::clearCurrentUser()
 {
+  // Add proper null checks before deletion
+  if (currentUser) {
+    // Check if the current user is one of our specialized types
+    if (currentUser == currentFreelancer || currentUser == currentHiringManager) {
+      delete currentUser;
+    } else {
+      // Handle case where we have separate objects
+      if (currentFreelancer) {
+        delete currentFreelancer;
+      }
+      if (currentHiringManager) {
+        delete currentHiringManager;
+      }
+    }
+  }
+
   currentUser = nullptr;
   currentFreelancer = nullptr;
   currentHiringManager = nullptr;

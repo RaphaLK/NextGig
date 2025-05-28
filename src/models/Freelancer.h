@@ -33,7 +33,8 @@ public:
     float getHourlyRate() const { return hourlyRate; }
     std::vector<std::string> getSkills() const { return skills; }
     education getEducation() const { return edu; }
-
+    
+    void setEducation(const education &_edu) {edu = _edu;}
     void setHourlyRate(float rate) { hourlyRate = rate; }
     void addSkill(const std::string &item) { skills.push_back(item); }
 };

@@ -154,7 +154,6 @@ void JobFeed::loadJobs()
         }
         
         allJobs = jobs;
-        filteredJobs = jobs;  
         displayFilteredJobs();
  });
 }
@@ -219,54 +218,54 @@ void JobFeed::displayFilteredJobs()
 
 void JobFeed::onJobSelected(QListWidgetItem *current, QListWidgetItem *previous)
 {
-  if (!current)
-  {
-    detailsGroup->setVisible(false);
-    return;
-  }
-
-  QString jobId = current->data(Qt::UserRole).toString();
-
-  // Find the job in our filtered list
-  const Job *selectedJob = nullptr;
-  for (const auto &job : filteredJobs)
-  {
-    if (QString::fromStdString(job.getJobId()) == jobId)
-    {
-      selectedJob = &job;
-      break;
+    if (!current) {
+        detailsGroup->setVisible(false);
+        currentJobId = "";
+        if (showApplyButtons && applyButton) {
+            applyButton->setEnabled(false);
+        }
+        return;
     }
-  }
 
-  if (!selectedJob)
-  {
-    detailsGroup->setVisible(false);
-    return;
-  }
-
-  // Update details view
-  jobTitleLabel->setText(QString::fromStdString(selectedJob->getJobTitle()));
-  jobDescriptionLabel->setText(QString::fromStdString(selectedJob->getJobDescription()));
-  employerLabel->setText(QString("<b>Employer:</b> %1").arg(QString::fromStdString(selectedJob->getEmployer())));
-  paymentLabel->setText(QString("<b>Payment:</b> %1").arg(QString::fromStdString(selectedJob->getPayment())));
-
-  // Format skills as bullet points
-  QString skillsHtml = "<ul style='margin-left: 15px;'>";
-  for (const auto &skill : selectedJob->getRequiredSkills())
-  {
-    skillsHtml += QString("<li>%1</li>").arg(QString::fromStdString(skill));
-  }
-  skillsHtml += "</ul>";
-  skillsLabel->setText(skillsHtml);
-
-  // Enable apply button if we're showing it
-  if (showApplyButtons && applyButton)
-  {
-    applyButton->setEnabled(true);
+    // Get job ID from the item's data
+    QString jobId = current->data(Qt::UserRole).toString();
     currentJobId = jobId.toStdString();
-  }
-
-  detailsGroup->setVisible(true);
+    
+    // Find the job in the filtered jobs list
+    const Job* selectedJob = nullptr;
+    for (const auto& job : filteredJobs) {
+        if (job.getJobId() == currentJobId) {
+            selectedJob = &job;
+            break;
+        }
+    }
+    
+    if (!selectedJob) {
+        qDebug() << "JobFeed: Job not found for ID:" << jobId;
+        detailsGroup->setVisible(false);
+        return;
+    }
+    
+    // Update the detail view with job info
+    jobTitleLabel->setText(QString::fromStdString(selectedJob->getJobTitle()));
+    jobDescriptionLabel->setText(QString::fromStdString(selectedJob->getJobDescription()));
+    employerLabel->setText("Employer: " + QString::fromStdString(selectedJob->getEmployer()));
+    paymentLabel->setText("Payment: $" + QString::fromStdString(selectedJob->getPayment()));
+    
+    // Format skills list
+    QString skillsText;
+    const auto& skills = selectedJob->getRequiredSkills();
+    for (size_t i = 0; i < skills.size(); ++i) {
+        if (i > 0) skillsText += ", ";
+        skillsText += QString::fromStdString(skills[i]);
+    }
+    skillsLabel->setText(skillsText);
+    
+    // Show the details group and enable apply button
+    detailsGroup->setVisible(true);
+    if (showApplyButtons && applyButton) {
+        applyButton->setEnabled(true);
+    }
 }
 
 void JobFeed::applyFilters()
@@ -282,27 +281,36 @@ void JobFeed::applyFilters()
 
 void JobFeed::onApplyClicked()
 {
-  if (currentJobId.empty())
-  {
-    QMessageBox::warning(this, "Error", "Please select a job first");
-    return;
-  }
+    if (currentJobId.empty()) {
+        QMessageBox::warning(this, "Error", "Please select a job first");
+        return;
+    }
 
-  // Check if user is logged in
-  UserManager *userManager = UserManager::getInstance();
-  if (!userManager->isUserLoggedIn() || !userManager->getCurrentFreelancer())
-  {
-    QMessageBox::warning(this, "Login Required", "You must be logged in as a freelancer to apply for jobs");
-    return;
-  }
+    // Check if user is logged in
+    UserManager *userManager = UserManager::getInstance();
+    // Add null checks before attempting to access the user
+    if (!userManager->isUserLoggedIn() || !userManager->getCurrentFreelancer()) {
+        QMessageBox::warning(this, "Login Required", "You must be logged in as a freelancer to apply for jobs");
+        return;
+    }
 
-  // Here you would implement the job application functionality
-  // For now, just show a message
-  QMessageBox::information(
-      this,
-      "Application Submitted",
-      "Your application has been submitted successfully!\n\n"
-      "The employer will review your profile and contact you if interested.");
+    // Confirm application
+    QMessageBox::StandardButton confirm = QMessageBox::question(
+        this, "Confirm Application", 
+        "Are you sure you want to apply for this job?",
+        QMessageBox::Yes | QMessageBox::No);
+    
+    if (confirm == QMessageBox::Yes) {
+        // In a real app, you'd call your backend to submit the application
+        // For now, we'll just show a success message
+        QMessageBox::information(this, "Application Submitted", 
+                                "Your application has been submitted successfully!");
+        
+        // Disable the apply button to prevent multiple applications
+        if (applyButton) {
+            applyButton->setEnabled(false);
+        }
+    }
 }
 
 void JobFeed::refreshJobs()
