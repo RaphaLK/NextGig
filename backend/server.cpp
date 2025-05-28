@@ -516,7 +516,7 @@ void Server::processRequest(int clientSocket, const std::string &request)
         // Get the document
         auto future = userRef.Get();
         future.OnCompletion([this, clientSocket](const firebase::Future<firebase::firestore::DocumentSnapshot> &future)
-        {
+                            {
                 QJsonObject response;
 
                 if (future.error() != firebase::firestore::kErrorOk)
@@ -566,8 +566,7 @@ void Server::processRequest(int clientSocket, const std::string &request)
 
                 QJsonDocument responseDoc(response);
                 sendResponse(clientSocket, responseDoc.toJson(QJsonDocument::Compact).toStdString());
-            }
-        });
+            } });
     }
     else if (requestType == "signout")
     {
@@ -772,6 +771,7 @@ void Server::processRequest(int clientSocket, const std::string &request)
     // —————————————
     else if (requestType == "getJobs")
     {
+        qDebug() << "Getting jobs";
         auto future = firestore->Collection("jobs").Get();
         future.OnCompletion(
             [this, clientSocket](const firebase::Future<firebase::firestore::QuerySnapshot> &f)
@@ -795,8 +795,8 @@ void Server::processRequest(int clientSocket, const std::string &request)
                         auto data = doc.GetData();
                         jobObj["jobTitle"] = QString::fromStdString(data["JobTitle"].string_value());
                         jobObj["jobDescription"] = QString::fromStdString(data["jobDescription"].string_value());
-                        jobObj["pay"] = int(data["pay"].integer_value());
-                        jobObj["uid"] = QString::fromStdString(data["uid"].string_value());
+                        jobObj["payment"] = QString::number(data["pay"].integer_value());
+                        jobObj["employerName"] = QString::fromStdString(data["employerName"].string_value());
 
                         // requiredSkills (array)
                         QJsonArray skillsJson;
@@ -805,6 +805,20 @@ void Server::processRequest(int clientSocket, const std::string &request)
                             skillsJson.append(QString::fromStdString(fv.string_value()));
                         }
                         jobObj["requiredSkills"] = skillsJson;
+
+                        if (data.find("date_created") != data.end() && data["date_created"].is_timestamp())
+                        {
+                            firebase::Timestamp timestamp = data["date_created"].timestamp_value();
+                            time_t seconds = timestamp.seconds();
+                            struct tm *timeinfo = localtime(&seconds);
+                            char buffer[80];
+                            strftime(buffer, sizeof(buffer), "%Y-%m-%d", timeinfo);
+                            jobObj["dateCreated"] = QString::fromStdString(buffer);
+                        }
+                        else
+                        {
+                            jobObj["dateCreated"] = QString::fromStdString("2023-01-01"); // Default date
+                        }
 
                         jobsArr.append(jobObj);
                     }
@@ -871,7 +885,6 @@ void Server::processRequest(int clientSocket, const std::string &request)
         QJsonDocument responseDoc(response);
         sendResponse(clientSocket, responseDoc.toJson(QJsonDocument::Compact).toStdString());
     }
-    
 }
 void Server::sendResponse(int clientSocket, const std::string &response)
 {

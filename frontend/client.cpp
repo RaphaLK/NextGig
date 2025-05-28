@@ -465,7 +465,7 @@ void BackendClient::getJobs(std::function<void(bool, std::vector<Job>)> callback
                             std::string desc = o["jobDescription"].toString().toStdString();
                             std::string employer = o["employerName"].toString().toStdString();
                             std::string created = o["dateCreated"].toString().toStdString();
-                            std::string expiry = o["expiryDate"].toString().toStdString();
+                            std::string expiry = o["expiryDate"].toString("").toStdString(); 
                             std::string payment = o["payment"].toString().toStdString();
 
                             // Arrays

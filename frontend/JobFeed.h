@@ -7,6 +7,7 @@
 #include <QLineEdit>
 #include <QComboBox>
 #include <QGroupBox>
+#include "AddJobDialog.h"
 #include "../src/models/Job.h"
 #include <vector>
 
@@ -41,6 +42,7 @@ private:
     QLabel* paymentLabel;
     QLabel* skillsLabel;
     QPushButton* applyButton;
+    QPushButton* addJobButton;
     QLineEdit* searchInput;
     QComboBox* skillFilterCombo;
     QGroupBox* detailsGroup;
@@ -54,5 +56,8 @@ private:
     // Helper methods
     void setupUI();
     void loadJobs();
+    void addJob();
+    void applyToJob();
+    void onAddJobClicked();
     void displayFilteredJobs();
 };
