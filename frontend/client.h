@@ -9,6 +9,7 @@
 #include "Freelancer.h"
 #include "HiringManager.h"
 #include "Job.h"
+#include "Proposal.h"
 class BackendClient : public QObject
 {
     Q_OBJECT
@@ -53,6 +54,7 @@ public:
     void addJob(Job &job, std::function<void(bool)> callback);
     void removeJob(const std::string &jobId, std::function<void(bool)> callback);
     void getJobs(std::function<void(bool, std::vector<Job>)> callback);
+    void applyForJob(Job &job, Proposal &proposal, std::function<void(bool)> callback);
 
 signals:
     void connectionError(const QString &errorMessage);

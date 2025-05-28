@@ -567,3 +567,26 @@ void BackendClient::getJobs(std::function<void(bool, std::vector<Job>)> callback
                     callback(success, jobs);
                 });
 }
+
+// —————————————————
+// APPLY FOR JOB
+// —————————————————
+// Extend Job document in Firebase with Proposal
+void BackendClient::applyForJob(Job &job, Proposal &proposal, std::function<void(bool)> callback)
+{
+    QJsonObject request;
+    request["type"] = "applyForJob";
+    qDebug() << "Apply Jobs backend request";
+    request["jobId"] = QString::fromStdString(job.getJobId());
+    request["AcceptedFreelancer"] = QString::fromStdString(job.getAcceptedFreelancerUid());
+    request["proposalDescription"] = QString::fromStdString(proposal.getProposalText());
+    request["budgetRequest"] = QString::fromStdString(proposal.getBudgetRequested());
+    request["freelancerUid"] = QString::fromStdString(proposal.getUid());
+
+    sendRequest(request,
+                [callback](const QJsonObject &response)
+                {
+                    bool success = (response["status"].toString() == "success");
+                    callback(success);
+                });
+}

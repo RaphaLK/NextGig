@@ -16,6 +16,7 @@
 #include "FreelancerProfileEdit.h"
 #include "UserManager.h"
 #include "JobFeed.h"
+#include "Proposal.h"
 
 FreelancerPortal::FreelancerPortal(QWidget *parent) : QWidget(parent), currentUser(nullptr)
 {

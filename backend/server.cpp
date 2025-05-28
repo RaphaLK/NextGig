@@ -912,6 +912,121 @@ void Server::processRequest(int clientSocket, const std::string &request)
                 });
         }
     }
+    else if (requestType == "applyForJob")
+    {
+        QString jobId = jsonRequest["jobId"].toString();
+        QString proposalDescription = jsonRequest["proposalDescription"].toString();
+        QString budgetRequest = jsonRequest["budgetRequest"].toString();
+        QString freelancerUid = jsonRequest["freelancerUid"].toString();
+        QString acceptedFreelancerUid = jsonRequest["acceptedFreelancer"].toString();
+
+        if (jobId.isEmpty())
+        {
+            QJsonObject err;
+            err["status"] = "error";
+            err["error"] = "applyForJob requires a jobId";
+            sendResponse(clientSocket,
+                         QJsonDocument(err)
+                             .toJson(QJsonDocument::Compact)
+                             .toStdString());
+
+            return;
+        }
+        // Reference to the job document
+        firebase::firestore::DocumentReference jobRef =
+            firestore->Collection("jobs").Document(jobId.toStdString());
+
+        // Get the job document first to check if it exists and to get current proposals
+        auto getFuture = jobRef.Get();
+        getFuture.OnCompletion([this, clientSocket, jobId, proposalDescription, budgetRequest, freelancerUid, jobRef](const firebase::Future<firebase::firestore::DocumentSnapshot> &future)
+                               {
+        
+        QJsonObject response;
+        
+        if (future.error() != firebase::firestore::kErrorOk) {
+            response["status"] = "error";
+            response["error"] = QString::fromStdString(future.error_message());
+            sendResponse(clientSocket, QJsonDocument(response).toJson(QJsonDocument::Compact).toStdString());
+            return;
+        }
+        
+        firebase::firestore::DocumentSnapshot snapshot = *future.result();
+        
+        if (!snapshot.exists()) {
+            response["status"] = "error";
+            response["error"] = "Job not found";
+            sendResponse(clientSocket, QJsonDocument(response).toJson(QJsonDocument::Compact).toStdString());
+            return;
+        }
+        
+        // Create a new proposal object
+        firebase::firestore::MapFieldValue newProposal;
+        newProposal["freelancerId"] = firebase::firestore::FieldValue::String(freelancerUid.toStdString());
+        newProposal["description"] = firebase::firestore::FieldValue::String(proposalDescription.toStdString());
+        newProposal["budgetRequest"] = firebase::firestore::FieldValue::String(budgetRequest.toStdString());
+        newProposal["status"] = firebase::firestore::FieldValue::String("pending");
+        newProposal["submittedAt"] = firebase::firestore::FieldValue::Timestamp(firebase::Timestamp::Now());
+        
+        // Update data for job document
+        firebase::firestore::MapFieldValue updateData;
+        
+        // Check if the job already has proposals
+        auto proposalsField = snapshot.Get("proposals");
+        std::vector<firebase::firestore::FieldValue> proposals;
+        
+        if (proposalsField.is_array()) {
+            // Copy existing proposals
+            proposals = proposalsField.array_value();
+            
+            // Check if this freelancer has already applied
+            bool alreadyApplied = false;
+            for (const auto& proposal : proposals) {
+                if (proposal.is_map()) {
+                    auto proposalMap = proposal.map_value();
+                    auto idIter = proposalMap.find("freelancerId");
+                    if (idIter != proposalMap.end() && 
+                        idIter->second.is_string() && 
+                        idIter->second.string_value() == freelancerUid.toStdString()) {
+                        alreadyApplied = true;
+                        break;
+                    }
+                }
+            }
+            
+            if (alreadyApplied) {
+                response["status"] = "error";
+                response["error"] = "You have already applied for this job";
+                sendResponse(clientSocket, QJsonDocument(response).toJson(QJsonDocument::Compact).toStdString());
+                return;
+            }
+        }
+        
+        // Add the new proposal
+        proposals.push_back(firebase::firestore::FieldValue::Map(newProposal));
+        updateData["proposals"] = firebase::firestore::FieldValue::Array(proposals);
+        
+        // Add approved freelancer field if it doesn't exist
+        auto approvedField = snapshot.Get("approvedFreelancer");
+        if (!approvedField.is_string()) {
+            updateData["approvedFreelancer"] = firebase::firestore::FieldValue::String("");
+        }
+        
+        // Update the job document
+        auto updateFuture = firestore->Collection("jobs").Document(jobId.toStdString()).Update(updateData);
+        updateFuture.OnCompletion([this, clientSocket](const firebase::Future<void> &future) {
+            QJsonObject response;
+            
+            if (future.error() != firebase::firestore::kErrorOk) {
+                response["status"] = "error";
+                response["error"] = QString::fromStdString(future.error_message());
+            } else {
+                response["status"] = "success";
+                response["message"] = "Job application submitted successfully";
+            }
+            
+            sendResponse(clientSocket, QJsonDocument(response).toJson(QJsonDocument::Compact).toStdString());
+        }); });
+    }
     else
     {
         QJsonObject response;

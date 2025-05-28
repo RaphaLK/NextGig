@@ -74,6 +74,8 @@
     "qmessagebox": "cpp",
     "qjsonarray": "cpp",
     "qlineedit": "cpp",
-    "qdebug": "cpp"
+    "qdebug": "cpp",
+    "qformlayout": "cpp",
+    "qtextedit": "cpp"
   }
 }
