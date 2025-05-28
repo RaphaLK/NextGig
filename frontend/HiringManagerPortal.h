@@ -32,8 +32,8 @@ private:
 
   // UI elements that need to be accessed from multiple methods
   QListWidget* postedJobsList;
-  QLabel* nameLabel;
-  QLabel* emailLabel;
+  QLabel *nameLabel;
+  QLabel *emailLabel;
   QTextEdit* descriptionTextEdit;
   QLabel* companyNameLabel;
   QTextEdit* companyDescriptionTextEdit;

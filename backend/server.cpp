@@ -459,7 +459,7 @@ void Server::processRequest(int clientSocket, const std::string &request)
                             if (hourlyRate.is_double()) {
                                 response["hourlyRate"] = hourlyRate.double_value();
                             } else {
-                                response["hourlyRate"] = 0.0;
+                                response["hourlyRate"] = "0";
                             }
                         }
                     } else {
@@ -712,7 +712,7 @@ void Server::processRequest(int clientSocket, const std::string &request)
     // —————————————
     // ADD A JOB
     // —————————————
-    if (requestType == "addJob")
+    else if (requestType == "addJob")
     {
         // pull fields out of the incoming JSON
         QString title = jsonRequest["jobTitle"].toString();

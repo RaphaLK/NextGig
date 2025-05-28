@@ -1,53 +1,51 @@
+#pragma once
 #include <stdlib.h>
 #include <stdio.h>
 #include <string>
 #include <vector>
+#include <algorithm>
 
 using namespace std;
 
 class Job
 {
-  private:
-    string jobId;
-    string jobTitle;
-    string jobDescription;
-    string employerName;
-    string dateCreated;
-    string expiryDate;
-    vector<string> requiredSkills;
-    vector<string> jobTags;
-    float payment;
+private:
+  string jobId;
+  string jobTitle;
+  string jobDescription;
+  string employerName;
+  string dateCreated;
+  string expiryDate;
+  vector<string> requiredSkills;
+  string payment;
 
-  public:
-    Job(string jobId, string jobTitle, 
-      string jobDescription, string employerName, 
-      string dateCreated, string expiryDate, 
-      vector<string> requiredSkills, vector<string> jobTags, 
-      float payment)
-        : jobId(jobId), jobTitle(jobTitle), 
-        jobDescription(jobDescription), 
-        employerName(employerName), dateCreated(dateCreated), 
-        expiryDate(expiryDate), requiredSkills(requiredSkills), 
-        jobTags(jobTags), payment(payment) {}
-    
-    ~Job();
+public:
+  Job(string jobId, string jobTitle,
+      string jobDescription, string employerName,
+      string dateCreated, string expiryDate,
+      vector<string> requiredSkills,
+      string payment)
+      : jobId(jobId), jobTitle(jobTitle),
+        jobDescription(jobDescription),
+        employerName(employerName), dateCreated(dateCreated),
+        expiryDate(expiryDate), requiredSkills(requiredSkills),
+        payment(payment) {}
 
-    // getters
-    string getJobId() { return jobId; }
-    string getJobTitle() { return jobTitle; }
-    string getJobDescription() { return jobDescription; }
-    string getEmployer() { return employerName; }
-    string getDateCreated() { return dateCreated; }
-    string getExpiryDate() { return expiryDate; }
-    vector<string> getRequiredSkills() { return requiredSkills; }
-    vector<string> getJobTags() { return jobTags; }
-    float getPayment() { return payment; }
+  ~Job() = default;
 
-    // setters
-    void updateExpiryDate(string newDate) { expiryDate = newDate; }
-    void insertJobTag(string tag);
-    void removeJobTag(string tag);
-    void insertRequiredSkill(string skill);
-    void removeRequiredSkill(string skill);
-    void updatePayment(float newPayment) { payment = newPayment; }
+  // getters
+  string getJobId() const { return jobId; }
+  string getJobTitle() const { return jobTitle; }
+  string getJobDescription() const { return jobDescription; }
+  string getEmployer() const { return employerName; }
+  string getDateCreated() const { return dateCreated; }
+  string getExpiryDate() const { return expiryDate; }
+  vector<string> getRequiredSkills() const { return requiredSkills; }
+  string getPayment() const { return payment; }
+
+  // setters
+  void updateExpiryDate(string newDate) { expiryDate = newDate; }
+  void insertRequiredSkill(string skill) { requiredSkills.push_back(skill); };
+  void removeRequiredSkill(string skill);
+  void updatePayment(float newPayment) { payment = newPayment; }
 };

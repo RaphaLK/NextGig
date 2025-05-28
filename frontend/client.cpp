@@ -98,7 +98,8 @@ void BackendClient::signIn(const QString &email, const QString &password,
     request["email"] = email;
     request["password"] = password;
 
-    sendRequest(request, [this, callback](const QJsonObject &response) {
+    sendRequest(request, [this, callback](const QJsonObject &response)
+                {
         if (response["status"].toString() == "success") {
 
             User* user = nullptr;
@@ -169,8 +170,7 @@ void BackendClient::signIn(const QString &email, const QString &password,
             callback(user, "");
         } else {
             callback(nullptr, response["error"].toString());
-        }
-    });
+        } });
 }
 
 void BackendClient::signOut(std::function<void(bool)> callback)
@@ -370,4 +370,125 @@ void BackendClient::updateHiringManagerProfile(HiringManager *hiringManager, std
                 {
         bool success = (response["status"].toString() == "success");
         callback(success); });
+}
+
+// void BackendClient::addJob(Job *Job, std::function<void(bool)> callback)
+// {
+//     QJsonObject request;
+//     request["type"] = "addJob";
+//     request["uid"] = QString::fromStdString(Job->getJobId());
+//     request["date_created"] = QString::fromStdString(Job->getDateCreated());
+//     request["pay"] = QString::fromStdString(Job->getPayment());
+//     request["jobDescription"] = QString::fromStdString(Job->getJobDescription());
+//     QJsonArray jobSkillsArray;
+//     for (const auto &skill : Job->getRequiredSkills())
+//     {
+//         QJsonObject jobObj;
+//         jobObj["skill"] = QString::fromStdString(skill);
+
+//         jobSkillsArray.append(jobObj);
+//     }
+//     request["jobSkills"] = jobSkillsArray;}
+
+// ADD JOB
+void BackendClient::addJob(Job &job, std::function<void(bool)> callback)
+{
+    QJsonObject request;
+    request["type"] = "addJob";
+    request["jobId"] = QString::fromStdString(job.getJobId());
+    request["jobTitle"] = QString::fromStdString(job.getJobTitle());
+    request["jobDescription"] = QString::fromStdString(job.getJobDescription());
+    request["employerName"] = QString::fromStdString(job.getEmployer());
+    request["dateCreated"] = QString::fromStdString(job.getDateCreated());
+    request["expiryDate"] = QString::fromStdString(job.getExpiryDate());
+    request["payment"] = QString::fromStdString(job.getPayment());
+
+    QJsonArray skillsArray;
+    for (const auto &skill : job.getRequiredSkills())
+        skillsArray.append(QString::fromStdString(skill));
+    request["requiredSkills"] = skillsArray;
+
+    sendRequest(request, [callback](const QJsonObject &response)
+                {
+        bool success = (response["status"].toString() == "success");
+        callback(success); });
+}
+
+// BackendClient.cpp
+
+// —————————————————
+// REMOVE JOB
+// —————————————————
+// Now takes a full Job object and uses job.getJobId() internally.
+void BackendClient::removeJob(const std::string &jobId,
+                              std::function<void(bool)> callback)
+{
+    QJsonObject request;
+    request["type"] = "deleteJob";
+    request["jobId"] = QString::fromStdString(jobId);
+
+    sendRequest(request,
+                [callback](const QJsonObject &response)
+                {
+                    bool success = (response["status"].toString() == "success");
+                    callback(success);
+                });
+}
+
+// —————————————————
+// GET ALL JOBS
+// —————————————————
+// Deserializes every field of your Job class.
+void BackendClient::getJobs(std::function<void(bool, std::vector<Job>)> callback)
+{
+    QJsonObject request;
+    request["type"] = "getJobs";
+
+    sendRequest(request,
+                [callback](const QJsonObject &response)
+                {
+                    bool success = (response["status"].toString() == "success");
+                    std::vector<Job> jobs;
+
+                    if (success)
+                    {
+                        QJsonArray arr = response["jobs"].toArray();
+                        jobs.reserve(arr.size());
+
+                        for (auto v : arr)
+                        {
+                            QJsonObject o = v.toObject();
+
+                            // Primitive fields
+                            std::string jobId = o["jobId"].toString().toStdString();
+                            std::string title = o["jobTitle"].toString().toStdString();
+                            std::string desc = o["jobDescription"].toString().toStdString();
+                            std::string employer = o["employerName"].toString().toStdString();
+                            std::string created = o["dateCreated"].toString().toStdString();
+                            std::string expiry = o["expiryDate"].toString().toStdString();
+                            std::string payment = o["payment"].toString().toStdString();
+
+                            // Arrays
+                            std::vector<std::string> skills;
+                            for (auto s : o["requiredSkills"].toArray())
+                                skills.push_back(s.toString().toStdString());
+
+                            std::vector<std::string> tags;
+                            for (auto t : o["jobTags"].toArray())
+                                tags.push_back(t.toString().toStdString());
+
+                            jobs.emplace_back(
+                                jobId,
+                                title,
+                                desc,
+                                employer,
+                                created,
+                                expiry,
+                                skills,
+                                payment);
+                        }
+                    }
+
+                    callback(success, jobs);
+                });
 }

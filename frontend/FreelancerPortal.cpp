@@ -15,6 +15,7 @@
 #include <QMessageBox>
 #include "FreelancerProfileEdit.h"
 #include "UserManager.h"
+#include "JobFeed.h"
 
 FreelancerPortal::FreelancerPortal(QWidget *parent) : QWidget(parent), currentUser(nullptr)
 {
@@ -127,103 +128,7 @@ QWidget *FreelancerPortal::renderFreelancerPortal()
 
 QWidget *FreelancerPortal::createJobsTab()
 {
-    QWidget *jobsWidget = new QWidget();
-    QVBoxLayout *jobsLayout = new QVBoxLayout(jobsWidget);
-
-    // Search and filter area
-    QGroupBox *filterGroup = new QGroupBox("Filter Jobs");
-    QHBoxLayout *filterLayout = new QHBoxLayout();
-
-    QLineEdit *searchBox = new QLineEdit();
-    searchBox->setPlaceholderText("Search by keyword...");
-
-    QComboBox *skillFilter = new QComboBox();
-    skillFilter->addItem("All Skills");
-    skillFilter->addItem("Web Development");
-    skillFilter->addItem("Mobile Development");
-    skillFilter->addItem("UI/UX Design");
-    skillFilter->addItem("Data Science");
-
-    QPushButton *applyFilterBtn = new QPushButton("Apply Filter");
-    applyFilterBtn->setStyleSheet("padding: 5px; background-color: #4CAF50; color: white;");
-
-    filterLayout->addWidget(new QLabel("Search:"));
-    filterLayout->addWidget(searchBox, 3);
-    filterLayout->addWidget(new QLabel("Skill:"));
-    filterLayout->addWidget(skillFilter, 2);
-    filterLayout->addWidget(applyFilterBtn);
-
-    filterGroup->setLayout(filterLayout);
-
-    // Jobs list area
-    QGroupBox *jobListGroup = new QGroupBox("Available Jobs");
-    QVBoxLayout *jobListLayout = new QVBoxLayout();
-
-    jobsList = new QListWidget();
-
-    // Sample job data (would be populated from backend in real app)
-    QListWidgetItem *job1 = new QListWidgetItem("Frontend Developer - React.js");
-    QListWidgetItem *job2 = new QListWidgetItem("Backend Engineer - Node.js & MongoDB");
-    QListWidgetItem *job3 = new QListWidgetItem("UI/UX Designer for Mobile App");
-    QListWidgetItem *job4 = new QListWidgetItem("WordPress Developer for E-commerce Site");
-    QListWidgetItem *job5 = new QListWidgetItem("Full Stack Developer - MERN Stack");
-
-    jobsList->addItem(job1);
-    jobsList->addItem(job2);
-    jobsList->addItem(job3);
-    jobsList->addItem(job4);
-    jobsList->addItem(job5);
-
-    jobListLayout->addWidget(jobsList);
-    jobListGroup->setLayout(jobListLayout);
-
-    // Job details area
-    QGroupBox *jobDetailsGroup = new QGroupBox("Job Details");
-    QVBoxLayout *detailsLayout = new QVBoxLayout();
-
-    jobTitleLabel = new QLabel("Select a job to view details");
-    jobTitleLabel->setStyleSheet("font-weight: bold; font-size: 14px;");
-
-    jobDescriptionLabel = new QLabel("");
-    jobDescriptionLabel->setWordWrap(true);
-
-    QPushButton *sendProposalBtn = new QPushButton("Send Proposal");
-    sendProposalBtn->setStyleSheet("padding: 8px; background-color: #007BFF; color: white;");
-
-    detailsLayout->addWidget(jobTitleLabel);
-    detailsLayout->addWidget(jobDescriptionLabel);
-    detailsLayout->addWidget(sendProposalBtn);
-    jobDetailsGroup->setLayout(detailsLayout);
-
-    // Connect job selection to update details
-    connect(jobsList, &QListWidget::currentItemChanged, [this](QListWidgetItem *current, QListWidgetItem *)
-            {
-        if (current) {
-            jobTitleLabel->setText(current->text());
-            jobDescriptionLabel->setText("This is a detailed description for the selected job. "
-                                        "It would include the job requirements, responsibilities, "
-                                        "payment details, and timeline expectations.");
-        } });
-
-    // Connect send proposal button
-    connect(sendProposalBtn, &QPushButton::clicked, [this]()
-            {
-        QListWidgetItem *selectedJob = jobsList->currentItem();
-        if (selectedJob) {
-            // In a real app, this would open a dialog to compose a message
-            QMessageBox::information(this, "Send Proposal", 
-                                    "This would open a message composer to send a proposal for: " + 
-                                    selectedJob->text());
-        } else {
-            QMessageBox::warning(this, "No Selection", "Please select a job first.");
-        } });
-
-    // Layout everything
-    jobsLayout->addWidget(filterGroup);
-    jobsLayout->addWidget(jobListGroup, 3);
-    jobsLayout->addWidget(jobDetailsGroup, 2);
-
-    return jobsWidget;
+    return new JobFeed(this, true); 
 }
 
 QWidget *FreelancerPortal::createProfileTab()

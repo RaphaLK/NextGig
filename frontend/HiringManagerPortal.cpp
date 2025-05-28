@@ -22,6 +22,7 @@
 #include <QJsonDocument>
 #include <QJsonValue>
 #include "UserManager.h"
+#include "JobFeed.h"
 
 HiringManagerPortal::HiringManagerPortal(QWidget *parent) : QWidget(parent), currentUser(nullptr)
 {
@@ -37,13 +38,12 @@ HiringManagerPortal::HiringManagerPortal(QWidget *parent) : QWidget(parent), cur
     {
         qDebug() << "HiringManagerPortal: Current user set to" << QString::fromStdString(currentUser->getName());
         fetchProfileFromFirebase();
-        updateProfileInfo(); 
+        updateProfileInfo();
     }
     else
     {
         qDebug() << "HiringManagerPortal: No user set in constructor";
     }
-
 }
 
 void HiringManagerPortal::setCurrentUser(User *user)
@@ -60,19 +60,22 @@ void HiringManagerPortal::setCurrentUser(User *user)
 
 void HiringManagerPortal::updateProfileInfo()
 {
-    if (!currentUser) {
+    if (!currentUser)
+    {
         qDebug() << "updateProfileInfo: currentUser is null";
         // Try to get the current user from UserManager as a fallback
         currentUser = UserManager::getInstance()->getCurrentUser();
-        
-        if (!currentUser) {
+
+        if (!currentUser)
+        {
             qDebug() << "Could not retrieve user from UserManager either";
             return;
         }
         qDebug() << "Retrieved user from UserManager: " << QString::fromStdString(currentUser->getName());
     }
 
-    try {
+    try
+    {
         // Debug the current user data
         qDebug() << "Updating profile UI with user data:";
         qDebug() << "  Name:" << QString::fromStdString(currentUser->getName());
@@ -80,34 +83,50 @@ void HiringManagerPortal::updateProfileInfo()
         qDebug() << "  Description:" << QString::fromStdString(currentUser->getDescription());
 
         // Update profile info in the profile tab
-        if (nameLabel) nameLabel->setText(QString::fromStdString(currentUser->getName()));
-        if (emailLabel) emailLabel->setText(QString::fromStdString(currentUser->getEmail()));
-        if (descriptionTextEdit) descriptionTextEdit->setPlainText(QString::fromStdString(currentUser->getDescription()));
+        if (nameLabel && nameLabel != nullptr)
+            nameLabel->setText(QString::fromStdString(currentUser->getName()));
+        if (emailLabel && emailLabel != nullptr)
+            emailLabel->setText(QString::fromStdString(currentUser->getEmail()));
+        if (descriptionTextEdit && descriptionTextEdit != nullptr)
+            descriptionTextEdit->setPlainText(QString::fromStdString(currentUser->getDescription()));
 
-        // Handle HiringManager specific fields
-        HiringManager *hiringManager = dynamic_cast<HiringManager *>(currentUser);
-        if (hiringManager) {
-            if (companyNameLabel) companyNameLabel->setText(QString::fromStdString(hiringManager->getCompanyName()));
+        qDebug() << "Successful UpdateProfileInfo HiringManager";
+        // // Handle HiringManager specific fields
+        // HiringManager *hiringManager = dynamic_cast<HiringManager *>(currentUser);
+        // if (hiringManager)
+        // {
+        //     if (companyNameLabel)
+        //         companyNameLabel->setText(QString::fromStdString(hiringManager->getCompanyName()));
 
-            qDebug() << "Updating HiringManager profile with:";
-            qDebug() << "  Company Name:" << QString::fromStdString(hiringManager->getCompanyName());
+        //     qDebug() << "Updating HiringManager profile with:";
+        //     qDebug() << "  Company Name:" << QString::fromStdString(hiringManager->getCompanyName());
 
-            // Handle accomplishments
-            if (accomplishmentsList) {  // Check if UI element exists
-                accomplishmentsList->clear();
-                const std::vector<std::string>& accomplishments = hiringManager->getAccomplishments();
-                for (const auto &acc : accomplishments) {
-                    accomplishmentsList->addItem(QString::fromStdString(acc));
-                }
-            }else {
-                qDebug() << "Warning: accomplishmentsList is null";
-            }
-        } else {
-            qDebug() << "User is not a HiringManager";
-        }
-    } catch (const std::exception& e) {
+        //     // Handle accomplishments
+        //     if (accomplishmentsList)
+        //     { // Check if UI element exists
+        //         accomplishmentsList->clear();
+        //         const std::vector<std::string> &accomplishments = hiringManager->getAccomplishments();
+        //         for (const auto &acc : accomplishments)
+        //         {
+        //             accomplishmentsList->addItem(QString::fromStdString(acc));
+        //         }
+        //     }
+        //     else
+        //     {
+        //         qDebug() << "Warning: accomplishmentsList is null";
+        //     }
+        // }
+        // else
+        // {
+        //     qDebug() << "User is not a HiringManager";
+        // }
+    }
+    catch (const std::exception &e)
+    {
         qDebug() << "Exception in updateProfileInfo:" << e.what();
-    } catch (...) {
+    }
+    catch (...)
+    {
         qDebug() << "Unknown exception in updateProfileInfo";
     }
 }
@@ -289,18 +308,19 @@ QWidget *HiringManagerPortal::createProfileTab()
     QFormLayout *infoLayout = new QFormLayout();
 
     UserManager *userManager = UserManager::getInstance();
-    HiringManager* hiringManager = userManager->getCurrentHiringManager();
+    HiringManager *hiringManager = userManager->getCurrentHiringManager();
 
     // Create default labels
-    QLabel* nameLabel = new QLabel("Please log in");
-    QLabel* emailLabel = new QLabel("");
+    nameLabel = new QLabel("Please log in");
+    emailLabel = new QLabel("");
     descriptionTextEdit = new QTextEdit();
     descriptionTextEdit->setReadOnly(true);
     descriptionTextEdit->setMaximumHeight(100);
     companyNameLabel = new QLabel("");
-    
+
     // Only try to populate them if we have a hiring manager
-    if (hiringManager) {
+    if (hiringManager)
+    {
         nameLabel->setText(QString::fromStdString(hiringManager->getName()));
         emailLabel->setText(QString::fromStdString(hiringManager->getEmail()));
         descriptionTextEdit->setText(QString::fromStdString(hiringManager->getCompanyDescription()));
@@ -322,7 +342,7 @@ QWidget *HiringManagerPortal::createProfileTab()
     QPushButton *editProfileBtn = new QPushButton("Edit Profile");
     editProfileBtn->setStyleSheet("background-color: #6c757d; color: white; padding: 8px;");
 
-        connect(editProfileBtn, &QPushButton::clicked, [this]()
+    connect(editProfileBtn, &QPushButton::clicked, [this]()
             {
         UserManager* userManager = UserManager::getInstance();
         
@@ -395,153 +415,7 @@ QWidget *HiringManagerPortal::createProfileTab()
 
 QWidget *HiringManagerPortal::createPostJobTab()
 {
-    QWidget *postJobWidget = new QWidget();
-    QVBoxLayout *mainLayout = new QVBoxLayout(postJobWidget);
-
-    // Job Details Form
-    QGroupBox *jobDetailsGroup = new QGroupBox("Job Details");
-    QFormLayout *jobDetailsLayout = new QFormLayout();
-
-    QLineEdit *titleEdit = new QLineEdit();
-    QTextEdit *descriptionEdit = new QTextEdit();
-
-    jobDetailsLayout->addRow("Job Title:", titleEdit);
-    jobDetailsLayout->addRow("Description:", descriptionEdit);
-    jobDetailsGroup->setLayout(jobDetailsLayout);
-
-    // Skills Requirements
-    QGroupBox *skillsGroup = new QGroupBox("Required Skills");
-    QVBoxLayout *skillsLayout = new QVBoxLayout();
-
-    QListWidget *skillsList = new QListWidget();
-    QHBoxLayout *addSkillLayout = new QHBoxLayout();
-    QLineEdit *skillInput = new QLineEdit();
-    QPushButton *addSkillBtn = new QPushButton("Add Skill");
-    QPushButton *removeSkillBtn = new QPushButton("Remove Selected");
-
-    skillInput->setPlaceholderText("Enter skill (e.g., JavaScript)");
-
-    addSkillLayout->addWidget(skillInput);
-    addSkillLayout->addWidget(addSkillBtn);
-
-    skillsLayout->addLayout(addSkillLayout);
-    skillsLayout->addWidget(skillsList);
-    skillsLayout->addWidget(removeSkillBtn, 0, Qt::AlignRight);
-
-    // Populate with common skills
-    skillsList->addItem("HTML");
-    skillsList->addItem("CSS");
-    skillsList->addItem("JavaScript");
-
-    // Connect skill buttons
-    connect(addSkillBtn, &QPushButton::clicked, [=]()
-            {
-        if (!skillInput->text().isEmpty()) {
-            skillsList->addItem(skillInput->text());
-            skillInput->clear();
-        } });
-
-    connect(removeSkillBtn, &QPushButton::clicked, [=]()
-            {
-        if (skillsList->currentRow() >= 0) {
-            delete skillsList->takeItem(skillsList->currentRow());
-        } });
-
-    skillsGroup->setLayout(skillsLayout);
-
-    // Budget and Timeline
-    QGroupBox *budgetGroup = new QGroupBox("Budget & Timeline");
-    QFormLayout *budgetLayout = new QFormLayout();
-
-    QHBoxLayout *budgetRangeLayout = new QHBoxLayout();
-    QDoubleSpinBox *minBudget = new QDoubleSpinBox();
-    QDoubleSpinBox *maxBudget = new QDoubleSpinBox();
-    QLabel *toLabel = new QLabel("to");
-
-    minBudget->setPrefix("$");
-    minBudget->setMaximum(100000);
-    minBudget->setValue(500);
-
-    maxBudget->setPrefix("$");
-    maxBudget->setMaximum(100000);
-    maxBudget->setValue(2000);
-
-    budgetRangeLayout->addWidget(minBudget);
-    budgetRangeLayout->addWidget(toLabel);
-    budgetRangeLayout->addWidget(maxBudget);
-
-    QComboBox *durationCombo = new QComboBox();
-    durationCombo->addItem("Less than 1 week");
-    durationCombo->addItem("1-2 weeks");
-    durationCombo->addItem("2-4 weeks");
-    durationCombo->addItem("1-3 months");
-    durationCombo->addItem("3-6 months");
-    durationCombo->addItem("More than 6 months");
-
-    QComboBox *experienceCombo = new QComboBox();
-    experienceCombo->addItem("Entry Level");
-    experienceCombo->addItem("Intermediate");
-    experienceCombo->addItem("Expert");
-
-    budgetLayout->addRow("Budget Range:", budgetRangeLayout);
-    budgetLayout->addRow("Expected Duration:", durationCombo);
-    budgetLayout->addRow("Experience Level:", experienceCombo);
-
-    budgetGroup->setLayout(budgetLayout);
-
-    // Additional Requirements
-    QGroupBox *additionalGroup = new QGroupBox("Additional Requirements");
-    QVBoxLayout *additionalLayout = new QVBoxLayout();
-
-    QCheckBox *remoteCheck = new QCheckBox("Remote work allowed");
-    QCheckBox *fullTimeCheck = new QCheckBox("Full-time availability required");
-    QCheckBox *nDACheck = new QCheckBox("NDA required");
-
-    remoteCheck->setChecked(true);
-
-    additionalLayout->addWidget(remoteCheck);
-    additionalLayout->addWidget(fullTimeCheck);
-    additionalLayout->addWidget(nDACheck);
-    additionalGroup->setLayout(additionalLayout);
-
-    // Submit button
-    QPushButton *postJobButton = new QPushButton("Post Job");
-    postJobButton->setStyleSheet("background-color: #28a745; color: white; padding: 10px; font-weight: bold;");
-
-    // Connect post job button
-    connect(postJobButton, &QPushButton::clicked, [=]()
-            {
-        if (titleEdit->text().isEmpty() || descriptionEdit->toPlainText().isEmpty()) {
-            QMessageBox::warning(this, "Missing Information", "Please fill in job title and description.");
-            return;
-        }
-        
-        if (skillsList->count() == 0) {
-            QMessageBox::warning(this, "Missing Skills", "Please add at least one required skill.");
-            return;
-        }
-        
-        // In a real app, this would save to the backend
-        QMessageBox::information(this, "Job Posted", 
-                                "Job '" + titleEdit->text() + "' has been posted successfully!");
-        
-        // Clear form for next posting
-        titleEdit->clear();
-        descriptionEdit->clear();
-        skillsList->clear();
-        minBudget->setValue(500);
-        maxBudget->setValue(2000);
-        durationCombo->setCurrentIndex(0);
-        experienceCombo->setCurrentIndex(0); });
-
-    // Arrange everything in the post job tab
-    mainLayout->addWidget(jobDetailsGroup);
-    mainLayout->addWidget(skillsGroup);
-    mainLayout->addWidget(budgetGroup);
-    mainLayout->addWidget(additionalGroup);
-    mainLayout->addWidget(postJobButton, 0, Qt::AlignCenter);
-
-    return postJobWidget;
+    return new JobFeed(this, false);
 }
 
 QWidget *HiringManagerPortal::createMessagesTab()
@@ -745,7 +619,8 @@ QWidget *HiringManagerPortal::createRatingsTab()
 
 void HiringManagerPortal::fetchProfileFromFirebase()
 {
-    if (!currentUser) {
+    if (!currentUser)
+    {
         qDebug() << "Cannot fetch profile: No user is set";
         return;
     }
@@ -762,7 +637,7 @@ void HiringManagerPortal::fetchProfileFromFirebase()
     requestObj["uid"] = uid;
 
     client->sendRequest(requestObj, [this](const QJsonObject &responseObj)
-    {
+                        {
         qDebug() << "Got profile response:" << QJsonDocument(responseObj).toJson();
         
         if (responseObj["status"].toString() == "success") {
@@ -802,20 +677,20 @@ void HiringManagerPortal::fetchProfileFromFirebase()
                     }
                     
                     // Parse tags if available
-                    if (responseObj.contains("tags")) {
-                        QJsonArray tagsArray = responseObj["tags"].toArray();
+                    // if (responseObj.contains("tags")) {
+                    //     QJsonArray tagsArray = responseObj["tags"].toArray();
                         
-                        // Clear existing tags
-                        std::vector<std::string> currentTags = hiringManager->getTags();
-                        for (const auto& tag : currentTags) {
-                            hiringManager->removeTags(tag);
-                        }
+                    //     // Clear existing tags
+                    //     std::vector<std::string> currentTags = hiringManager->getTags();
+                    //     for (const auto& tag : currentTags) {
+                    //         hiringManager->removeTags(tag);
+                    //     }
                         
-                        // Add new tags
-                        for (const auto &tagValue : tagsArray) {
-                            hiringManager->addTags(tagValue.toString().toStdString());
-                        }
-                    }
+                    //     // Add new tags
+                    //     for (const auto &tagValue : tagsArray) {
+                    //         hiringManager->addTags(tagValue.toString().toStdString());
+                    //     }
+                    // }
                     
                     // Parse accomplishments if available
                     if (responseObj.contains("accomplishments")) {
@@ -878,6 +753,5 @@ void HiringManagerPortal::fetchProfileFromFirebase()
                 errorMsg += ": " + responseObj["error"].toString();
             }
             QMessageBox::warning(this, "Profile Load Error", errorMsg);
-        }
-    });
+        } });
 }
