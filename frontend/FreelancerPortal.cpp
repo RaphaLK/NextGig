@@ -258,52 +258,218 @@ QWidget *FreelancerPortal::createProfileTab()
 QWidget *FreelancerPortal::createMessagesTab()
 {
     QWidget *messagesWidget = new QWidget();
-    QVBoxLayout *messagesLayout = new QVBoxLayout(messagesWidget);
-
-    // Messages inbox
-    QGroupBox *inboxGroup = new QGroupBox("Inbox");
-    QVBoxLayout *inboxLayout = new QVBoxLayout();
-
-    QListWidget *messagesList = new QListWidget();
-    messagesList->addItem("Job proposal response from TechCorp");
-    messagesList->addItem("Follow-up from DesignStudio about your application");
-    messagesList->addItem("Rating received for completed project");
-
-    inboxLayout->addWidget(messagesList);
-    inboxGroup->setLayout(inboxLayout);
-
-    // Message details
-    QGroupBox *messageDetailsGroup = new QGroupBox("Message");
-    QVBoxLayout *messageDetailsLayout = new QVBoxLayout();
-
-    QLabel *messageFromLabel = new QLabel("From: ");
-    QLabel *messageSubjectLabel = new QLabel("Subject: ");
-    QTextEdit *messageBodyText = new QTextEdit();
-    messageBodyText->setReadOnly(true);
-
-    messageDetailsLayout->addWidget(messageFromLabel);
-    messageDetailsLayout->addWidget(messageSubjectLabel);
-    messageDetailsLayout->addWidget(messageBodyText);
-    messageDetailsGroup->setLayout(messageDetailsLayout);
-
-    // Reply button
-    QPushButton *replyBtn = new QPushButton("Reply");
-    replyBtn->setStyleSheet("padding: 8px; background-color: #007BFF; color: white;");
-
-    // Connect message selection
-    connect(messagesList, &QListWidget::currentItemChanged, [=](QListWidgetItem *current, QListWidgetItem *)
-            {
+    QGridLayout *messagesLayout = new QGridLayout(messagesWidget);
+    
+    // 1. Top Left: Jobs Applied For
+    QGroupBox *appliedJobsGroup = new QGroupBox("Jobs Applied For");
+    appliedJobsGroup->setStyleSheet("QGroupBox { font-weight: bold; font-size: 14px; }");
+    QVBoxLayout *appliedJobsLayout = new QVBoxLayout();
+    
+    QListWidget *appliedJobsList = new QListWidget();
+    appliedJobsList->addItem("Frontend Developer at TechCorp");
+    appliedJobsList->addItem("UI/UX Designer at DesignStudio");
+    appliedJobsList->addItem("React Developer at WebSolutions");
+    appliedJobsList->setStyleSheet("QListWidget::item { padding: 8px; }");
+    
+    appliedJobsLayout->addWidget(appliedJobsList);
+    appliedJobsGroup->setLayout(appliedJobsLayout);
+    
+    // 2. Top Right: Approved Jobs
+    QGroupBox *approvedJobsGroup = new QGroupBox("Approved Applications");
+    approvedJobsGroup->setStyleSheet("QGroupBox { font-weight: bold; font-size: 14px; }");
+    QVBoxLayout *approvedJobsLayout = new QVBoxLayout();
+    
+    QListWidget *approvedJobsList = new QListWidget();
+    approvedJobsList->addItem("✓ React Native Developer at MobileApp Inc.");
+    approvedJobsList->addItem("✓ Database Consultant at DataTech");
+    approvedJobsList->setStyleSheet("QListWidget::item { padding: 8px; color: #28a745; }");
+    
+    approvedJobsLayout->addWidget(approvedJobsList);
+    approvedJobsGroup->setLayout(approvedJobsLayout);
+    
+    // 3. Bottom Left: Job Information + Proposal
+    QGroupBox *jobInfoGroup = new QGroupBox("Job Information & Your Proposal");
+    jobInfoGroup->setStyleSheet("QGroupBox { font-weight: bold; font-size: 14px; }");
+    QVBoxLayout *jobInfoLayout = new QVBoxLayout();
+    
+    // Job title and details
+    QLabel *jobTitleLabel = new QLabel("Job Title: Not Selected");
+    jobTitleLabel->setStyleSheet("font-weight: bold; font-size: 16px; color: #2c3e50;");
+    
+    QLabel *jobDescLabel = new QLabel("Job Description:");
+    jobDescLabel->setStyleSheet("font-weight: bold; margin-top: 10px;");
+    
+    QTextEdit *jobDescText = new QTextEdit();
+    jobDescText->setReadOnly(true);
+    jobDescText->setMaximumHeight(100);
+    jobDescText->setStyleSheet("background-color: #f8f9fa; border-radius: 4px;");
+    
+    QLabel *paymentLabel = new QLabel("Payment Offer: Not Selected");
+    paymentLabel->setStyleSheet("font-weight: bold; color: #28a745;");
+    
+    // Proposal section
+    QLabel *yourProposalLabel = new QLabel("Your Proposal:");
+    yourProposalLabel->setStyleSheet("font-weight: bold; margin-top: 10px;");
+    
+    QTextEdit *proposalText = new QTextEdit();
+    proposalText->setReadOnly(true);
+    proposalText->setStyleSheet("background-color: #f8f9fa; border-radius: 4px;");
+    
+    QLabel *requestedAmountLabel = new QLabel("Your Requested Payment: Not Available");
+    requestedAmountLabel->setStyleSheet("font-weight: bold; color: #17a2b8;");
+    
+    QLabel *statusLabel = new QLabel("Status: Pending");
+    statusLabel->setStyleSheet("font-weight: bold; color: #ffc107; margin-top: 10px;");
+    
+    jobInfoLayout->addWidget(jobTitleLabel);
+    jobInfoLayout->addWidget(jobDescLabel);
+    jobInfoLayout->addWidget(jobDescText);
+    jobInfoLayout->addWidget(paymentLabel);
+    jobInfoLayout->addWidget(yourProposalLabel);
+    jobInfoLayout->addWidget(proposalText);
+    jobInfoLayout->addWidget(requestedAmountLabel);
+    jobInfoLayout->addWidget(statusLabel);
+    
+    jobInfoGroup->setLayout(jobInfoLayout);
+    
+    // 4. Bottom Right: Employer Details
+    QGroupBox *employerGroup = new QGroupBox("Employer Details");
+    employerGroup->setStyleSheet("QGroupBox { font-weight: bold; font-size: 14px; }");
+    QVBoxLayout *employerLayout = new QVBoxLayout();
+    
+    QLabel *employerNameLabel = new QLabel("Company: Not Selected");
+    employerNameLabel->setStyleSheet("font-weight: bold; font-size: 15px;");
+    
+    QLabel *contactLabel = new QLabel("Contact:");
+    contactLabel->setStyleSheet("font-weight: bold; margin-top: 10px;");
+    
+    QLabel *emailLabel = new QLabel("Email: Not Available");
+    
+    QLabel *companyInfoLabel = new QLabel("Company Profile:");
+    companyInfoLabel->setStyleSheet("font-weight: bold; margin-top: 10px;");
+    
+    QTextEdit *companyInfoText = new QTextEdit();
+    companyInfoText->setReadOnly(true);
+    companyInfoText->setMaximumHeight(150);
+    companyInfoText->setStyleSheet("background-color: #f8f9fa; border-radius: 4px;");
+    
+    QLabel *ratingLabel = new QLabel("Employer Rating: ★★★★☆ (4.2)");
+    ratingLabel->setStyleSheet("color: #f39c12; margin-top: 10px;");
+    
+    // Message employer button
+    QPushButton *messageBtn = new QPushButton("Message Employer");
+    messageBtn->setStyleSheet("background-color: #007bff; color: white; padding: 8px; border-radius: 4px;");
+    
+    employerLayout->addWidget(employerNameLabel);
+    employerLayout->addWidget(contactLabel);
+    employerLayout->addWidget(emailLabel);
+    employerLayout->addWidget(companyInfoLabel);
+    employerLayout->addWidget(companyInfoText);
+    employerLayout->addWidget(ratingLabel);
+    employerLayout->addWidget(messageBtn);
+    employerLayout->addStretch();
+    
+    employerGroup->setLayout(employerLayout);
+    
+    // Set up connections between selected job and detail views
+    connect(appliedJobsList, &QListWidget::currentItemChanged, [=](QListWidgetItem *current, QListWidgetItem *)
+    {
         if (current) {
-            messageFromLabel->setText("From: " + current->text().split(" ").back());
-            messageSubjectLabel->setText("Subject: " + current->text());
-            messageBodyText->setPlainText("This is the body of the selected message. In a real application, "
-                                         "this would contain the actual message content from the sender.");
-        } });
-
-    // Layout
-    messagesLayout->addWidget(inboxGroup, 2);
-    messagesLayout->addWidget(messageDetailsGroup, 3);
-    messagesLayout->addWidget(replyBtn, 0, Qt::AlignRight);
-
+            QString jobTitle = current->text();
+            jobTitleLabel->setText("Job Title: " + jobTitle);
+            
+            // Simulate different job details based on selection
+            if (jobTitle.contains("Frontend")) {
+                jobDescText->setPlainText("We're looking for an experienced Frontend Developer to join our team. "
+                                         "The ideal candidate should have strong skills in React, Vue, or Angular.");
+                paymentLabel->setText("Payment Offer: $40-50/hour");
+                employerNameLabel->setText("Company: TechCorp");
+                emailLabel->setText("Email: jobs@techcorp.com");
+                companyInfoText->setPlainText("TechCorp is a leading software development company specializing in web applications. "
+                                             "Founded in 2010, we have a team of over 100 developers worldwide.");
+                proposalText->setPlainText("I believe my 5 years of experience in React and Vue make me an ideal candidate for this role. "
+                                          "I've previously worked on similar projects and can deliver high-quality code on time.");
+                requestedAmountLabel->setText("Your Requested Payment: $45/hour");
+                statusLabel->setText("Status: Under Review");
+                statusLabel->setStyleSheet("font-weight: bold; color: #ffc107; margin-top: 10px;");
+            } else if (jobTitle.contains("UI/UX")) {
+                jobDescText->setPlainText("DesignStudio is seeking a creative UI/UX Designer with experience in Figma and Adobe XD. "
+                                         "You'll be responsible for creating intuitive user interfaces for web and mobile applications.");
+                paymentLabel->setText("Payment Offer: Fixed $5,000");
+                employerNameLabel->setText("Company: DesignStudio");
+                emailLabel->setText("Email: careers@designstudio.com");
+                companyInfoText->setPlainText("DesignStudio is a creative agency focused on branding and digital product design. "
+                                             "We work with startups and established companies to create beautiful, functional designs.");
+                proposalText->setPlainText("I have a strong portfolio of UI/UX designs and would love to bring my aesthetic sense to your project. "
+                                          "I specialize in creating designs that are both beautiful and highly usable.");
+                requestedAmountLabel->setText("Your Requested Payment: $5,200");
+                statusLabel->setText("Status: Pending");
+                statusLabel->setStyleSheet("font-weight: bold; color: #ffc107; margin-top: 10px;");
+            } else if (jobTitle.contains("React Developer")) {
+                jobDescText->setPlainText("WebSolutions is looking for a React Developer to help build a new e-commerce platform. "
+                                         "Experience with Redux, TypeScript, and responsive design is required.");
+                paymentLabel->setText("Payment Offer: $35-45/hour");
+                employerNameLabel->setText("Company: WebSolutions");
+                emailLabel->setText("Email: hiring@websolutions.com");
+                companyInfoText->setPlainText("WebSolutions builds custom web applications for clients across various industries. "
+                                             "Our team is fully remote and collaborates using modern development practices.");
+                proposalText->setPlainText("I've been working with React for 3 years and have built several e-commerce applications. "
+                                          "I'm particularly strong with Redux state management and can start immediately.");
+                requestedAmountLabel->setText("Your Requested Payment: $42/hour");
+                statusLabel->setText("Status: Interview Scheduled");
+                statusLabel->setStyleSheet("font-weight: bold; color: #17a2b8; margin-top: 10px;");
+            }
+        }
+    });
+    
+    connect(approvedJobsList, &QListWidget::currentItemChanged, [=](QListWidgetItem *current, QListWidgetItem *)
+    {
+        if (current) {
+            QString jobTitle = current->text().mid(2); // Remove the checkmark
+            jobTitleLabel->setText("Job Title: " + jobTitle);
+            
+            // Show approved job details
+            if (jobTitle.contains("React Native")) {
+                jobDescText->setPlainText("MobileApp Inc. needs a React Native developer to help build a cross-platform mobile app. "
+                                         "The project is expected to last 3 months with possibility of extension.");
+                paymentLabel->setText("Payment Offer: $50/hour");
+                employerNameLabel->setText("Company: MobileApp Inc.");
+                emailLabel->setText("Email: dev@mobileapp.com");
+                companyInfoText->setPlainText("MobileApp Inc. specializes in creating mobile applications for businesses. "
+                                             "We're a small team of 15 developers focused on delivering high-quality apps.");
+                proposalText->setPlainText("I have extensive experience with React Native and have published several apps to both App Store and Play Store. "
+                                          "I can commit to your timeline and deliver a polished product.");
+                requestedAmountLabel->setText("Your Requested Payment: $48/hour");
+                statusLabel->setText("Status: Approved ✓");
+                statusLabel->setStyleSheet("font-weight: bold; color: #28a745; margin-top: 10px;");
+            } else if (jobTitle.contains("Database")) {
+                jobDescText->setPlainText("DataTech is looking for a database consultant to optimize their PostgreSQL setup. "
+                                         "This is a short-term contract expected to last 2-4 weeks.");
+                paymentLabel->setText("Payment Offer: $4,000 fixed");
+                employerNameLabel->setText("Company: DataTech");
+                emailLabel->setText("Email: consulting@datatech.com");
+                companyInfoText->setPlainText("DataTech provides data management solutions for enterprise clients. "
+                                             "The company has been in business for over 15 years and has a global presence.");
+                proposalText->setPlainText("As a database administrator with 8+ years of experience, I can identify and resolve your performance issues quickly. "
+                                          "I've worked on similar optimization projects with great results.");
+                requestedAmountLabel->setText("Your Requested Payment: $4,200");
+                statusLabel->setText("Status: Approved ✓");
+                statusLabel->setStyleSheet("font-weight: bold; color: #28a745; margin-top: 10px;");
+            }
+        }
+    });
+    
+    // Add all widgets to the grid layout
+    messagesLayout->addWidget(appliedJobsGroup, 0, 0);
+    messagesLayout->addWidget(approvedJobsGroup, 0, 1);
+    messagesLayout->addWidget(jobInfoGroup, 1, 0);
+    messagesLayout->addWidget(employerGroup, 1, 1);
+    
+    // Set column and row stretching
+    messagesLayout->setColumnStretch(0, 1);
+    messagesLayout->setColumnStretch(1, 1);
+    messagesLayout->setRowStretch(0, 1);
+    messagesLayout->setRowStretch(1, 2); // Give more space to bottom row
+    
     return messagesWidget;
 }
