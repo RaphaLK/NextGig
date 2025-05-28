@@ -25,11 +25,17 @@ public:
                float _hourlyRate) : User(_uid, _email, _name, _description, _tags, 
                                          _accomplishments, _jobHistory, User::FREELANCER),
                                     edu(_education),hourlyRate(_hourlyRate) {}
+    Freelancer() : User(), hourlyRate(0.0) {
+        edu.school = "";
+        edu.degreeLvl = "";
+    }
 
     float getHourlyRate() const { return hourlyRate; }
     std::vector<std::string> getSkills() const { return skills; }
     education getEducation() const { return edu; }
-
+    
+    std::vector<std::string>& getSkills() { return skills; }
+    void setEducation(const education &_edu) {edu = _edu;}
     void setHourlyRate(float rate) { hourlyRate = rate; }
     void addSkill(const std::string &item) { skills.push_back(item); }
 };

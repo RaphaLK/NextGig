@@ -71,6 +71,9 @@
     "typeinfo": "cpp",
     "variant": "cpp",
     "csignal": "cpp",
-    "qmessagebox": "cpp"
+    "qmessagebox": "cpp",
+    "qjsonarray": "cpp",
+    "qlineedit": "cpp",
+    "qdebug": "cpp"
   }
 }

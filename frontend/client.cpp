@@ -1,4 +1,5 @@
 #include "client.h"
+#include "UserManager.h"
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QJsonArray>
@@ -100,77 +101,136 @@ void BackendClient::signIn(const QString &email, const QString &password,
     sendRequest(request, [this, callback](const QJsonObject &response)
                 {
         if (response["status"].toString() == "success") {
-            // Extract user data from response
-            QString uid = response["uid"].toString();
-            QString email = response["email"].toString();
-            QString name = response["name"].toString();
-            QString description = response["description"].toString();
+
+            User* user = nullptr;
             bool isHiringManager = response["isHiringManager"].toBool();
             
-            // Parse tags if available
-            std::vector<std::string> tags;
-            if (response.contains("tags") && response["tags"].isArray()) {
-                QJsonArray tagsArray = response["tags"].toArray();
-                for (const auto &tag : tagsArray) {
-                    tags.push_back(tag.toString().toStdString());
-                }
-            }
-            
-            // Parse education if available
-            User::education edu = {"", ""};
-            if (response.contains("education") && response["education"].isObject()) {
-                QJsonObject eduObj = response["education"].toObject();
-                edu.school = eduObj["school"].toString().toStdString();
-                edu.degreeLvl = eduObj["degree_lvl"].toString().toStdString();
-            }
-            
-            // Parse accomplishments if available
-            std::vector<std::string> accomplishments;
-            if (response.contains("accomplishments") && response["accomplishments"].isArray()) {
-                QJsonArray accArray = response["accomplishments"].toArray();
-                for (const auto &acc : accArray) {
-                    accomplishments.push_back(acc.toString().toStdString());
-                }
-            }
-            
-            // Parse job history if available
-            std::vector<User::experience> jobHistory;
-            if (response.contains("jobHistory") && response["jobHistory"].isArray()) {
-                QJsonArray jobArray = response["jobHistory"].toArray();
-                for (const auto &jobValue : jobArray) {
-                    QJsonObject jobObj = jobValue.toObject();
-                    User::experience job;
-                    job.jobTitle = jobObj["jobTitle"].toString().toStdString();
-                    job.startDate = jobObj["startDate"].toString().toStdString();
-                    job.endDate = jobObj["endDate"].toString().toStdString();
-                    job.description = jobObj["description"].toString().toStdString();
-                    jobHistory.push_back(job);
-                }
-            }
-            
-            // Create the appropriate user object based on type
             if (isHiringManager) {
-                QString companyName = response["companyName"].toString();
-                QString companyDesc = response["companyDescription"].toString();
+                HiringManager* hiringManager = new HiringManager();
+                // Fill basic fields
+                hiringManager->setUid(response["uid"].toString().toStdString());
+                hiringManager->setEmail(response["email"].toString().toStdString());
+                hiringManager->setName(response.value("username").toString().toStdString());
                 
-                currentUser = new HiringManager(
-                    uid.toStdString(), email.toStdString(), name.toStdString(),
-                    description.toStdString(), tags,
-                    accomplishments, jobHistory,
-                    companyName.toStdString(), companyDesc.toStdString()
-                );
+                // Fill specific fields if available
+                if (response.contains("name")) {
+                    hiringManager->setName(response["name"].toString().toStdString());
+                }
+                if (response.contains("description")) {
+                    hiringManager->setDescription(response["description"].toString().toStdString());
+                }
+                if (response.contains("companyName")) {
+                    hiringManager->setCompanyName(response["companyName"].toString().toStdString());
+                }
+                if (response.contains("companyDescription")) {
+                    hiringManager->setCompanyDescription(response["companyDescription"].toString().toStdString());
+                }
+                
+                // Parse arrays
+                if (response.contains("tags") && response["tags"].isArray()) {
+                    QJsonArray tagsArray = response["tags"].toArray();
+                    for (const auto &tag : tagsArray) {
+                        hiringManager->addTags(tag.toString().toStdString());
+                    }
+                }
+                
+                if (response.contains("accomplishments") && response["accomplishments"].isArray()) {
+                    QJsonArray accArray = response["accomplishments"].toArray();
+                    for (const auto &acc : accArray) {
+                        hiringManager->addAccomplishment(acc.toString().toStdString());
+                    }
+                }
+                
+                if (response.contains("jobHistory") && response["jobHistory"].isArray()) {
+                    QJsonArray jobArray = response["jobHistory"].toArray();
+                    for (const auto &jobValue : jobArray) {
+                        QJsonObject jobObj = jobValue.toObject();
+                        hiringManager->addJobHistory(
+                            jobObj["jobTitle"].toString().toStdString(),
+                            jobObj["startDate"].toString().toStdString(),
+                            jobObj["endDate"].toString().toStdString(),
+                            jobObj["description"].toString().toStdString()
+                        );
+                    }
+                }
+                
+                user = hiringManager;
             } else {
-                float hourlyRate = response["hourlyRate"].toDouble(0);
+                // Create Freelancer object and populate similarly
+                Freelancer* freelancer = new Freelancer();
                 
-                currentUser = new Freelancer(
-                    uid.toStdString(), email.toStdString(), name.toStdString(),
-                    description.toStdString(), tags, 
-                    accomplishments, jobHistory, edu, hourlyRate
-                );
+                // MISSING CODE: You need to set UID and basic fields for Freelancer too!
+                freelancer->setUid(response["uid"].toString().toStdString());
+                freelancer->setEmail(response["email"].toString().toStdString());
+                freelancer->setName(response.value("username").toString().toStdString());
+                
+                // Same field processing as for HiringManager for common fields
+                if (response.contains("name")) {
+                    freelancer->setName(response["name"].toString().toStdString());
+                }
+                if (response.contains("description")) {
+                    freelancer->setDescription(response["description"].toString().toStdString());
+                }
+                
+                // Parse Freelancer-specific fields
+                if (response.contains("hourlyRate")) {
+                    freelancer->setHourlyRate(response["hourlyRate"].toDouble());
+                }
+                
+                // Parse education if available
+                if (response.contains("education") && response["education"].isObject()) {
+                    QJsonObject eduObj = response["education"].toObject();
+                    User::education edu;
+                    edu.school = eduObj["school"].toString().toStdString();
+                    edu.degreeLvl = eduObj["degree_lvl"].toString().toStdString();
+                    freelancer->setEducation(edu);
+                }
+                
+                // Parse skills if available
+                if (response.contains("skills") && response["skills"].isArray()) {
+                    QJsonArray skillsArray = response["skills"].toArray();
+                    for (const auto &skill : skillsArray) {
+                        freelancer->addSkill(skill.toString().toStdString());
+                    }
+                }
+                
+                // Parse tags (same as for HiringManager)
+                if (response.contains("tags") && response["tags"].isArray()) {
+                    QJsonArray tagsArray = response["tags"].toArray();
+                    for (const auto &tag : tagsArray) {
+                        freelancer->addTags(tag.toString().toStdString());
+                    }
+                }
+                
+                // Parse accomplishments (same as for HiringManager)
+                if (response.contains("accomplishments") && response["accomplishments"].isArray()) {
+                    QJsonArray accArray = response["accomplishments"].toArray();
+                    for (const auto &acc : accArray) {
+                        freelancer->addAccomplishment(acc.toString().toStdString());
+                    }
+                }
+                
+                // Parse job history (same as for HiringManager)
+                if (response.contains("jobHistory") && response["jobHistory"].isArray()) {
+                    QJsonArray jobArray = response["jobHistory"].toArray();
+                    for (const auto &jobValue : jobArray) {
+                        QJsonObject jobObj = jobValue.toObject();
+                        freelancer->addJobHistory(
+                            jobObj["jobTitle"].toString().toStdString(),
+                            jobObj["startDate"].toString().toStdString(),
+                            jobObj["endDate"].toString().toStdString(),
+                            jobObj["description"].toString().toStdString()
+                        );
+                    }
+                }
+                user = freelancer;
             }
             
-            currentUser->setAuthStatus(true);
-            callback(currentUser, "");
+            // Store the user in UserManager
+            UserManager::getInstance()->setCurrentUser(user);
+            
+            // Call the callback with the populated user
+            callback(user, "");
         } else {
             callback(nullptr, response["error"].toString());
         } });
@@ -186,11 +246,11 @@ void BackendClient::signOut(std::function<void(bool)> callback)
         bool success = (response["status"].toString() == "success");
         
         // Clean up the current user object
-        if (currentUser) {
-            delete currentUser; // Free memory
-            currentUser = nullptr; // Reset pointer
+        currentUser = nullptr; // Reset pointer
+                // Make sure UserManager also clears its references
+        if (success) {
+            UserManager::getInstance()->clearCurrentUser();
         }
-        
         callback(success); });
 }
 
@@ -275,6 +335,16 @@ void BackendClient::onReadyRead()
 
 void BackendClient::updateFreelancerProfile(Freelancer *freelancer, std::function<void(bool)> callback)
 {
+    if (!freelancer || freelancer->getUid().empty()) {
+        qDebug() << "Error: Cannot update profile with empty UID";
+        if (callback) {
+            callback(false);
+        }
+        return;
+    }
+    
+    qDebug() << "Updating freelancer profile for UID:" << QString::fromStdString(freelancer->getUid());
+    
     QJsonObject request;
     request["type"] = "updateProfile";
     request["uid"] = QString::fromStdString(freelancer->getUid());
@@ -373,4 +443,127 @@ void BackendClient::updateHiringManagerProfile(HiringManager *hiringManager, std
                 {
         bool success = (response["status"].toString() == "success");
         callback(success); });
+}
+
+// void BackendClient::addJob(Job *Job, std::function<void(bool)> callback)
+// {
+//     QJsonObject request;
+//     request["type"] = "addJob";
+//     request["uid"] = QString::fromStdString(Job->getJobId());
+//     request["date_created"] = QString::fromStdString(Job->getDateCreated());
+//     request["pay"] = QString::fromStdString(Job->getPayment());
+//     request["jobDescription"] = QString::fromStdString(Job->getJobDescription());
+//     QJsonArray jobSkillsArray;
+//     for (const auto &skill : Job->getRequiredSkills())
+//     {
+//         QJsonObject jobObj;
+//         jobObj["skill"] = QString::fromStdString(skill);
+
+//         jobSkillsArray.append(jobObj);
+//     }
+//     request["jobSkills"] = jobSkillsArray;}
+
+// ADD JOB
+void BackendClient::addJob(Job &job, std::function<void(bool)> callback)
+{
+    QJsonObject request;
+    request["type"] = "addJob";
+    request["jobId"] = QString::fromStdString(job.getJobId());
+    request["jobTitle"] = QString::fromStdString(job.getJobTitle());
+    request["jobDescription"] = QString::fromStdString(job.getJobDescription());
+    request["employerName"] = QString::fromStdString(job.getEmployer());
+    request["dateCreated"] = QString::fromStdString(job.getDateCreated());
+    request["expiryDate"] = QString::fromStdString(job.getExpiryDate());
+    request["payment"] = QString::fromStdString(job.getPayment());
+
+    QJsonArray skillsArray;
+    for (const auto &skill : job.getRequiredSkills())
+        skillsArray.append(QString::fromStdString(skill));
+    request["requiredSkills"] = skillsArray;
+
+    sendRequest(request, [callback](const QJsonObject &response)
+                {
+        bool success = (response["status"].toString() == "success");
+        callback(success); });
+}
+
+// BackendClient.cpp
+
+// —————————————————
+// REMOVE JOB
+// —————————————————
+// Now takes a full Job object and uses job.getJobId() internally.
+void BackendClient::removeJob(const std::string &jobId,
+                              std::function<void(bool)> callback)
+{
+    QJsonObject request;
+    request["type"] = "deleteJob";
+    request["jobId"] = QString::fromStdString(jobId);
+
+    sendRequest(request,
+                [callback](const QJsonObject &response)
+                {
+                    bool success = (response["status"].toString() == "success");
+                    callback(success);
+                });
+}
+
+// —————————————————
+// GET ALL JOBS
+// —————————————————
+// Deserializes every field of your Job class.
+void BackendClient::getJobs(std::function<void(bool, std::vector<Job>)> callback)
+{
+    QJsonObject request;
+    request["type"] = "getJobs";
+    qDebug() << "get Jobs backend request";
+    sendRequest(request,
+                [callback](const QJsonObject &response)
+                {
+                    bool success = (response["status"].toString() == "success");
+                    std::vector<Job> jobs;
+
+                    if (success)
+                    {
+                        QJsonArray arr = response["jobs"].toArray();
+                        jobs.reserve(arr.size());
+
+                        qDebug() << "Parsing jobs, count:" << arr.size();
+                        for (auto v : arr)
+                        {
+                            QJsonObject o = v.toObject();
+
+                            // Primitive fields
+                            std::string jobId = o["jobId"].toString().toStdString();
+                            std::string title = o["jobTitle"].toString().toStdString();
+                            std::string desc = o["jobDescription"].toString().toStdString();
+                            std::string employer = o["employerName"].toString().toStdString();
+                            std::string created = o["dateCreated"].toString().toStdString();
+                            std::string expiry = o["expiryDate"].toString("").toStdString();
+                            std::string payment = o["payment"].toString().toStdString();
+
+                            // Arrays
+                            std::vector<std::string> skills;
+                            for (auto s : o["requiredSkills"].toArray())
+                                skills.push_back(s.toString().toStdString());
+
+                            jobs.push_back(Job(
+                                jobId,
+                                title,
+                                desc,
+                                employer,
+                                created,
+                                expiry,
+                                skills,
+                                payment));
+                        }
+                        qDebug() << "Jobs parsed:" << jobs.size();
+                    }
+                    else
+                    {
+                        qDebug() << "Request failed - getJobs";
+                    }
+
+                    callback(success, jobs);
+                });
 }

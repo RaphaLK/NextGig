@@ -10,50 +10,94 @@
 
 HomeWindow::HomeWindow(QWidget *parent) : QWidget(parent)
 {
-	stack = new QStackedWidget(this);
+    stack = new QStackedWidget(this);
 
-	setupNavigationStack();
-	// Set the stack as the main layout
-	QVBoxLayout *mainLayout = new QVBoxLayout(this);
-	mainLayout->addWidget(stack);
-	setLayout(mainLayout);
+    setupNavigationStack();
+    // Set the stack as the main layout
+    QVBoxLayout *mainLayout = new QVBoxLayout(this);
+    mainLayout->addWidget(stack);
+    setLayout(mainLayout);
 }
 
 void HomeWindow::setupNavigationStack()
 {
-	// Create page objects here
-	QWidget *homePage = RenderHomePage();
-	LoginWindow *loginPage = new LoginWindow();
-	SignUpWindow *signupPage = new SignUpWindow();
-	HiringManagerPortal *h_managerPortal = new HiringManagerPortal;
-	FreelancerPortal *freelancePortal = new FreelancerPortal;
+    // Create only non-user-specific pages at startup
+    QWidget *homePage = RenderHomePage();
+    LoginWindow *loginPage = new LoginWindow();
+    SignUpWindow *signupPage = new SignUpWindow();
+    
+    // Add objects to navigation stack -- indexes are as shown:
+    stack->addWidget(homePage);       // Index 0
+    stack->addWidget(loginPage);      // Index 1
+    stack->addWidget(signupPage);     // Index 2
+    
+    // Add placeholders for portals
+    hiringManagerIndex = -1;   // We'll set this when we create the portal
+    freelancerIndex = -1;      // We'll set this when we create the portal
 
-	// Add objects to navigation stack -- indexes are as shown:
-	stack->addWidget(homePage);		// Index 0
-	stack->addWidget(loginPage);	// Index 1
-	stack->addWidget(signupPage); // Index 2
-	stack->addWidget(h_managerPortal);
-	stack->addWidget(freelancePortal);
+    // Connect login success signals to portal creation methods
+    connect(loginPage, &LoginWindow::hiringManagerLoginSuccess, 
+            this, &HomeWindow::createAndShowHiringManagerPortal);
+            
+    connect(loginPage, &LoginWindow::freelancerLoginSuccess, 
+            this, &HomeWindow::createAndShowFreelancerPortal);
 
-	// add signals here
-	connect(loginPage, &LoginWindow::returnToHomeRequested, [this]()
-					{ stack->setCurrentIndex(0); });
-
-	connect(loginPage, &LoginWindow::hiringManagerLoginSuccess, [this]()
-					{ stack->setCurrentIndex(3); });
-
-	connect(loginPage, &LoginWindow::freelancerLoginSuccess, [this]()
-					{ stack->setCurrentIndex(4); });
-
-	connect(freelancePortal, &FreelancerPortal::returnToHomeRequested, [this]()
-					{ stack->setCurrentIndex(0); });
-
-	connect(signupPage, &SignUpWindow::returnToHomeRequested, [this]()
-					{ stack->setCurrentIndex(0); });
-
-	connect(h_managerPortal, &HiringManagerPortal::returnToHomeRequested, [this]()
-					{ stack->setCurrentIndex(0); });
+    // Other navigation connections
+    connect(loginPage, &LoginWindow::returnToHomeRequested, 
+            [this](){ stack->setCurrentIndex(0); });
+            
+    connect(signupPage, &SignUpWindow::returnToHomeRequested, 
+            [this](){ stack->setCurrentIndex(0); });
 }
+
+void HomeWindow::createAndShowHiringManagerPortal()
+{
+    // Check if we already have a hiring manager portal
+    if (hiringManagerIndex >= 0) {
+        // Remove the old portal if it exists
+        QWidget* oldPortal = stack->widget(hiringManagerIndex);
+        if (oldPortal) {
+            stack->removeWidget(oldPortal);
+            delete oldPortal;
+        }
+    }
+    
+    // Create a new portal
+    HiringManagerPortal *portal = new HiringManagerPortal();
+    hiringManagerIndex = stack->addWidget(portal);
+    
+    // Connect its navigation signals
+    connect(portal, &HiringManagerPortal::returnToHomeRequested, 
+            [this](){ stack->setCurrentIndex(0); });
+    
+    // Show the portal
+    stack->setCurrentIndex(hiringManagerIndex);
+}
+
+void HomeWindow::createAndShowFreelancerPortal()
+{
+    // Check if we already have a freelancer portal
+    if (freelancerIndex >= 0) {
+        // Remove the old portal if it exists
+        QWidget* oldPortal = stack->widget(freelancerIndex);
+        if (oldPortal) {
+            stack->removeWidget(oldPortal);
+            delete oldPortal;
+        }
+    }
+    
+    // Create a new portal
+    FreelancerPortal *portal = new FreelancerPortal();
+    freelancerIndex = stack->addWidget(portal);
+    
+    // Connect its navigation signals
+    connect(portal, &FreelancerPortal::returnToHomeRequested, 
+            [this](){ stack->setCurrentIndex(0); });
+    
+    // Show the portal
+    stack->setCurrentIndex(freelancerIndex);
+}
+
 
 QWidget *HomeWindow::RenderHomePage()
 {

@@ -7,17 +7,19 @@
 #include "../src/models/HiringManager.h"
 
 // Singleton class to manage the application's current user
-class UserManager {
+class UserManager
+{
 public:
-    static UserManager* getInstance();
+    static UserManager *getInstance();
+    ~UserManager() { clearCurrentUser(); }
 
-    User* getCurrentUser() { return currentUser; }
-    void setCurrentUser(User* user);
+    User *getCurrentUser() { return currentUser; }
+    void setCurrentUser(User *user);
     void clearCurrentUser();
-    
+
     // Type-safe getter for freelancer
-    Freelancer* getCurrentFreelancer();
-    HiringManager* getCurrentHiringManager();
+    Freelancer *getCurrentFreelancer();
+    HiringManager *getCurrentHiringManager();
 
     // Check if current user exists and is of a specific type
     bool isUserLoggedIn() const;
@@ -25,15 +27,18 @@ public:
     bool isHiringManager;
 
 private:
-    UserManager() : currentUser(nullptr) {}
-    ~UserManager() { clearCurrentUser(); }
-    
+    User *currentUser = nullptr;
+    Freelancer *currentFreelancer = nullptr;
+    HiringManager *currentHiringManager = nullptr;
+
+    // Private constructor for singleton
+    UserManager() {}
+
     // Disable copy/move operations
-    UserManager(const UserManager&) = delete;
-    UserManager& operator=(const UserManager&) = delete;
-    UserManager(UserManager&&) = delete;
-    UserManager& operator=(UserManager&&) = delete;
-    
-    static UserManager* instance;
-    User* currentUser;
+    UserManager(const UserManager &) = delete;
+    UserManager &operator=(const UserManager &) = delete;
+    UserManager(UserManager &&) = delete;
+    UserManager &operator=(UserManager &&) = delete;
+
+    static std::unique_ptr<UserManager> instance;
 };

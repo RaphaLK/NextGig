@@ -8,7 +8,7 @@
 #include <QGroupBox>
 #include <QMessageBox>
 #include <QScrollArea>
-
+#include "UserManager.h"
 FreelancerProfileEdit::FreelancerProfileEdit(Freelancer* freelancer, QWidget* parent)
     : QDialog(parent), freelancer(freelancer)
 {
@@ -273,66 +273,66 @@ void FreelancerProfileEdit::saveProfile()
 {
     // Get client instance
     BackendClient* client = BackendClient::getInstance();
+    UserManager *userManager = UserManager::getInstance();
+
+    Freelancer *currUser = userManager->getCurrentFreelancer();
+    // Debug the UID before updating
+    qDebug() << "Saving profile for freelancer with UID:" << QString::fromStdString(currUser->getUid());
+    
+    if (currUser->getUid().empty()) {
+        QMessageBox::warning(this, "Update Failed", 
+                           "Cannot update profile: User ID is missing.");
+        return;
+    }
     
     // Update freelancer object
-    freelancer->setDescription(descriptionEdit->toPlainText().toStdString());
-    dynamic_cast<Freelancer*>(freelancer)->setHourlyRate(hourlyRateEdit->value());
+    currUser->setDescription(descriptionEdit->toPlainText().toStdString());
+    currUser->setHourlyRate(hourlyRateEdit->value());
     
     // Update skills/tags
     std::vector<std::string> skillsAndTags;
     for (int i = 0; i < skillsList->count(); ++i) {
         skillsAndTags.push_back(skillsList->item(i)->text().toStdString());
     }
-    
-    // First 5 items are considered tags, the rest are skills --- TODO: Not this
+
     std::vector<std::string> tags;
     std::vector<std::string> skills;
     
     int count = 0;
     for (const auto& item : skillsAndTags) {
-        if (count < 5) {
-            tags.push_back(item);
-        } else {
-            skills.push_back(item);
-        }
+        skills.push_back(item);
+        
         count++;
     }
     
-    // Clear and update tags
-    for (const auto& tag : freelancer->getTags()) {
-        freelancer->removeTags(tag);
-    }
-    
-    for (const auto& tag : tags) {
-        freelancer->addTags(tag);
-    }
     
     // Update skills
-    dynamic_cast<Freelancer*>(freelancer)->getSkills().clear();
+    currUser->getSkills().clear();
     for (const auto& skill : skills) {
-        dynamic_cast<Freelancer*>(freelancer)->addSkill(skill);
+        currUser->addSkill(skill);
     }
     
     // Update education
-    education edu;
+    User::education edu;
     edu.school = educationTitleEdit->text().toStdString();
     edu.degreeLvl = educationLevelEdit->text().toStdString();
+    currUser->setEducation(edu);
 
     // Update accomplishments
     // Clear existing accomplishments
-    for (const auto& acc : freelancer->getAccomplishments()) {
-        freelancer->removeAccomplishment(acc);
+    for (const auto& acc : currUser->getAccomplishments()) {
+        currUser->removeAccomplishment(acc);
     }
     
     // Add new accomplishments
     for (int i = 0; i < accomplishmentsList->count(); ++i) {
-        freelancer->addAccomplishment(accomplishmentsList->item(i)->text().toStdString());
+        currUser->addAccomplishment(accomplishmentsList->item(i)->text().toStdString());
     }
     
     // Update job history
     // Clear existing job history
-    for (const auto& job : freelancer->getJobHistory()) {
-        freelancer->removeJobHistory(job.jobTitle);
+    for (const auto& job : currUser->getJobHistory()) {
+        currUser->removeJobHistory(job.jobTitle);
     }
     
     // Add new jobs
@@ -341,7 +341,7 @@ void FreelancerProfileEdit::saveProfile()
         QStringList jobData = item->data(Qt::UserRole).toStringList();
         
         if (jobData.size() >= 4) {
-            freelancer->addJobHistory(
+            currUser->addJobHistory(
                 jobData[0].toStdString(),
                 jobData[1].toStdString(),
                 jobData[2].toStdString(),
@@ -350,8 +350,15 @@ void FreelancerProfileEdit::saveProfile()
         }
     }
     
+    // Double-check that the UID is still valid
+    if (currUser->getUid().empty()) {
+        QMessageBox::warning(this, "Update Failed", 
+                           "User ID was lost during update processing.");
+        return;
+    }
+    
     // Save to Firebase through BackendClient
-    client->updateFreelancerProfile(freelancer, [this](bool success) {
+    client->updateFreelancerProfile(currUser, [this](bool success) {
         if (success) {
             emit profileUpdated();
             accept();
