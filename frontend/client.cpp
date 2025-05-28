@@ -183,11 +183,11 @@ void BackendClient::signOut(std::function<void(bool)> callback)
         bool success = (response["status"].toString() == "success");
         
         // Clean up the current user object
-        if (currentUser) {
-            delete currentUser; // Free memory
-            currentUser = nullptr; // Reset pointer
+        currentUser = nullptr; // Reset pointer
+                // Make sure UserManager also clears its references
+        if (success) {
+            UserManager::getInstance()->clearCurrentUser();
         }
-        
         callback(success); });
 }
 

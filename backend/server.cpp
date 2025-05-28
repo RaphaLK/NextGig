@@ -716,15 +716,15 @@ void Server::processRequest(int clientSocket, const std::string &request)
         // pull fields out of the incoming JSON
         QString title = jsonRequest["jobTitle"].toString();
         QString desc = jsonRequest["jobDescription"].toString();
-        int pay = jsonRequest["pay"].toInt();
-        QString uid = jsonRequest["uid"].toString();
+        QString pay = jsonRequest["payment"].toString();
+        QString uid = jsonRequest["employerName"].toString();
         QJsonArray skillsArray = jsonRequest["requiredSkills"].toArray();
 
         // build the Firestore map
         firebase::firestore::MapFieldValue jobData;
         jobData["JobTitle"] = firebase::firestore::FieldValue::String(title.toStdString());
         jobData["jobDescription"] = firebase::firestore::FieldValue::String(desc.toStdString());
-        jobData["pay"] = firebase::firestore::FieldValue::Integer(pay);
+        jobData["pay"] = firebase::firestore::FieldValue::String(pay.toStdString());
         jobData["date_created"] = firebase::firestore::FieldValue::Timestamp(firebase::Timestamp::Now());
         jobData["uid"] = firebase::firestore::FieldValue::String(uid.toStdString());
 
@@ -796,8 +796,8 @@ void Server::processRequest(int clientSocket, const std::string &request)
                         auto data = doc.GetData();
                         jobObj["jobTitle"] = QString::fromStdString(data["JobTitle"].string_value());
                         jobObj["jobDescription"] = QString::fromStdString(data["jobDescription"].string_value());
-                        jobObj["payment"] = QString::number(data["pay"].integer_value());
-                        jobObj["employerName"] = QString::fromStdString(data["employerName"].string_value());
+                        jobObj["payment"] = QString::fromStdString(data["pay"].string_value());
+                        jobObj["employerName"] = QString::fromStdString(data["uid"].string_value());
 
                         // requiredSkills (array)
                         QJsonArray skillsJson;

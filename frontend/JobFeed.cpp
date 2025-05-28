@@ -154,13 +154,9 @@ void JobFeed::loadJobs()
         }
         
         allJobs = jobs;
-        filteredJobs = jobs;  // Initialize filteredJobs with all jobs initially
-
-        for (const auto& job : jobs) {
-          QListWidgetItem* item = new QListWidgetItem(QString::fromStdString(job.getJobTitle()));
-          item->setData(Qt::UserRole, QString::fromStdString(job.getJobId()));
-          jobsList->addItem(item);
-        } });
+        filteredJobs = jobs;  
+        displayFilteredJobs();
+ });
 }
 
 void JobFeed::displayFilteredJobs()
