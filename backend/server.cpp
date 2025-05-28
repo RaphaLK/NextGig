@@ -785,6 +785,7 @@ void Server::processRequest(int clientSocket, const std::string &request)
                 else
                 {
                     resp["status"] = "success";
+                    resp["type"] = "getJobs";
                     QJsonArray jobsArr;
 
                     for (auto const &doc : f.result()->documents())

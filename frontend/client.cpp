@@ -443,7 +443,7 @@ void BackendClient::getJobs(std::function<void(bool, std::vector<Job>)> callback
 {
     QJsonObject request;
     request["type"] = "getJobs";
-
+    qDebug() << "get Jobs backend request";
     sendRequest(request,
                 [callback](const QJsonObject &response)
                 {
@@ -455,6 +455,7 @@ void BackendClient::getJobs(std::function<void(bool, std::vector<Job>)> callback
                         QJsonArray arr = response["jobs"].toArray();
                         jobs.reserve(arr.size());
 
+                        qDebug() << "Parsing jobs, count:" << arr.size();
                         for (auto v : arr)
                         {
                             QJsonObject o = v.toObject();
@@ -465,7 +466,7 @@ void BackendClient::getJobs(std::function<void(bool, std::vector<Job>)> callback
                             std::string desc = o["jobDescription"].toString().toStdString();
                             std::string employer = o["employerName"].toString().toStdString();
                             std::string created = o["dateCreated"].toString().toStdString();
-                            std::string expiry = o["expiryDate"].toString("").toStdString(); 
+                            std::string expiry = o["expiryDate"].toString("").toStdString();
                             std::string payment = o["payment"].toString().toStdString();
 
                             // Arrays
@@ -473,11 +474,7 @@ void BackendClient::getJobs(std::function<void(bool, std::vector<Job>)> callback
                             for (auto s : o["requiredSkills"].toArray())
                                 skills.push_back(s.toString().toStdString());
 
-                            std::vector<std::string> tags;
-                            for (auto t : o["jobTags"].toArray())
-                                tags.push_back(t.toString().toStdString());
-
-                            jobs.emplace_back(
+                            jobs.push_back(Job(
                                 jobId,
                                 title,
                                 desc,
@@ -485,8 +482,13 @@ void BackendClient::getJobs(std::function<void(bool, std::vector<Job>)> callback
                                 created,
                                 expiry,
                                 skills,
-                                payment);
+                                payment));
                         }
+                        qDebug() << "Jobs parsed:" << jobs.size();
+                    }
+                    else
+                    {
+                        qDebug() << "Request failed - getJobs";
                     }
 
                     callback(success, jobs);

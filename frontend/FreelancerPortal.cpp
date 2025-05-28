@@ -128,7 +128,8 @@ QWidget *FreelancerPortal::renderFreelancerPortal()
 
 QWidget *FreelancerPortal::createJobsTab()
 {
-    return new JobFeed(this, true); 
+    JobFeed *jobFeed = new JobFeed(this, true);
+    return jobFeed;
 }
 
 QWidget *FreelancerPortal::createProfileTab()

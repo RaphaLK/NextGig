@@ -16,6 +16,7 @@
 #include <QSpacerItem>
 #include "UserManager.h"
 #include "Job.h"
+#include <fstream> // Add at the top of your file
 
 JobFeed::JobFeed(QWidget *parent, bool showApplyButtons)
     : QWidget(parent), showApplyButtons(showApplyButtons)
@@ -61,7 +62,7 @@ void JobFeed::setupUI()
 
   jobsList = new QListWidget();
   jobsLayout->addWidget(jobsList);
-
+  jobsGroup->setLayout(jobsLayout);
   // Create job details section
   detailsGroup = new QGroupBox("Job Details");
   QVBoxLayout *detailsLayout = new QVBoxLayout();
@@ -153,7 +154,13 @@ void JobFeed::loadJobs()
         }
         
         allJobs = jobs;
-        displayFilteredJobs(); });
+        filteredJobs = jobs;  // Initialize filteredJobs with all jobs initially
+
+        for (const auto& job : jobs) {
+          QListWidgetItem* item = new QListWidgetItem(QString::fromStdString(job.getJobTitle()));
+          item->setData(Qt::UserRole, QString::fromStdString(job.getJobId()));
+          jobsList->addItem(item);
+        } });
 }
 
 void JobFeed::displayFilteredJobs()
@@ -268,6 +275,12 @@ void JobFeed::onJobSelected(QListWidgetItem *current, QListWidgetItem *previous)
 
 void JobFeed::applyFilters()
 {
+  if (allJobs.empty()) {
+    qDebug() << "JobFeed: No jobs to filter, reloading jobs first";
+    loadJobs();
+    return;
+  }
+  
   displayFilteredJobs();
 }
 
