@@ -57,6 +57,32 @@ public:
     void applyForJob(Job &job, Proposal &proposal, std::function<void(bool)> callback);
 
     void getProposals(const QString &employerId, std::function<void(bool, const QJsonArray &)> callback);
+    void getApprovedJobs(const QString &freelancerId, std::function<void(bool, const QJsonArray &)> callback);
+    void getAppliedJobs(const QString &freelancerId, std::function<void(bool, const QJsonArray &)> callback);
+    void getHiringManagerProfile(const QString &employerId, std::function<void(bool, const QJsonArray &)> callback);
+    void respondToProposal(const QString &jobId,
+                                      const QString &freelancerId,
+                                      bool accept,
+                                      std::function<void(bool)> callback);
+    void updateJobStatus(const QString &jobId,
+                                    const QString &newStatus,
+                                    std::function<void(bool)> callback);
+    void updateCompletedJobs(const QString &userId,
+                                        const QString &jobId,
+                                        const QString &hiringManagerId,
+                                        const QString &freelancerId,
+                                        const QString &jobName,
+                                        const QString &jobDescription,
+                                        double budgetRequested,
+                                        std::function<void(bool)> callback);
+    void getCompletedJobs(const QString &userId,
+                                     bool asHiringManager,
+                                     std::function<void(bool, const QJsonArray &)> callback);
+    void rateUser(const QString &fromUserId,
+                                const QString &colleagueId,
+                                int rating,
+                                const QString &comment,
+                                std::function<void(bool)> callback);
 signals:
     void connectionError(const QString &errorMessage);
     void serverResponseReceived(const QJsonObject &response);
