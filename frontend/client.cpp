@@ -335,16 +335,18 @@ void BackendClient::onReadyRead()
 
 void BackendClient::updateFreelancerProfile(Freelancer *freelancer, std::function<void(bool)> callback)
 {
-    if (!freelancer || freelancer->getUid().empty()) {
+    if (!freelancer || freelancer->getUid().empty())
+    {
         qDebug() << "Error: Cannot update profile with empty UID";
-        if (callback) {
+        if (callback)
+        {
             callback(false);
         }
         return;
     }
-    
+
     qDebug() << "Updating freelancer profile for UID:" << QString::fromStdString(freelancer->getUid());
-    
+
     QJsonObject request;
     request["type"] = "updateProfile";
     request["uid"] = QString::fromStdString(freelancer->getUid());
@@ -590,3 +592,86 @@ void BackendClient::applyForJob(Job &job, Proposal &proposal, std::function<void
                     callback(success);
                 });
 }
+
+/*************
+ * GET ALL PROPOSALS
+ * -------------------
+ * Look for every job with a uid field that matches the employer's username. Then, retrieve the entire job back
+ */
+void BackendClient::getProposals(const QString &employerId, std::function<void(bool, const QJsonArray&)> callback)
+{
+    QJsonObject request;
+    request["type"] = "getProposals";
+    request["employerId"] = employerId;
+    
+    qDebug() << "Getting proposals for employer ID:" << employerId;
+    
+    sendRequest(request,
+                [callback](const QJsonObject &response)
+                {
+                    bool success = (response["status"].toString() == "success");
+                    
+                    if (success && response.contains("proposals"))
+                    {
+                        QJsonArray proposals = response["proposals"].toArray();
+                        qDebug() << "Retrieved" << proposals.size() << "proposals";
+                        callback(true, proposals);
+                    }
+                    else
+                    {
+                        qDebug() << "Failed to get proposals:" << response["error"].toString();
+                        callback(false, QJsonArray());
+                    }
+                });
+}
+/***************
+ * GET FREELANCER PROFILE
+ * --------------------------------
+ * Retrieve the freelancer profile based on a UID
+ */
+
+/**********************
+ * GET HIRINGMANAGER PROFILE
+ * ---------------------------
+ * Retrieve the HiringManager profile based on UID
+ */
+
+/***********************
+ * RESPOND TO PROPOSAL
+ * ---------------------
+ * Given a proposal of a certain JobId, set the approved freelancer and clear the proposals array
+ * OR delete the proposal from a certain freelancer
+ */
+
+/*********************
+ * UPDATE JOB STATUS
+ * ---------------------------
+ * HiringManager can mark a job as pending, in-progress, or complete
+ * If complete, add this to the Freelancer's and Hiring Manager's "Completed Jobs" array
+ * TODO: update the "Fetch ALL Jobs to fetch only pending jobs"
+ */
+
+/*********************
+ * UPDATE COMPLETED JOBS
+ * ----------------------------
+ * Update user document to add a Job to their Job Completion Array. Should have:
+ * - JobId
+ * - HiringManagerId
+ * - FreelancerId
+ * - Job Name
+ * - Job Description
+ * - Budget Requested
+ */
+
+/*********************
+ * RETRIEVE COMPLETED JOBS
+ * ----------------------------
+ * Depending if the user is a Freelancer or HiringManager, retrieve the HiringManagerId or FreelancerId since we need
+ * one type of user to rate the other. Name this under "ColleagueId". Return the entire array.
+ */
+
+/************
+ * RATE OTHER USER
+ * ---------------------
+ * Allows user to RATE another user through this.
+ */

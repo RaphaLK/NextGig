@@ -56,6 +56,7 @@ public:
     void getJobs(std::function<void(bool, std::vector<Job>)> callback);
     void applyForJob(Job &job, Proposal &proposal, std::function<void(bool)> callback);
 
+    void getProposals(const QString &employerId, std::function<void(bool, const QJsonArray &)> callback);
 signals:
     void connectionError(const QString &errorMessage);
     void serverResponseReceived(const QJsonObject &response);
