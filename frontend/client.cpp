@@ -60,7 +60,7 @@ void BackendClient::disconnectFromServer()
         }
 
         connected = false;
-        qDebug() << "Client disconnected from server";
+        qDebug() << "Client disconnected from server" << Qt::endl;
     }
 }
 
@@ -281,7 +281,7 @@ void BackendClient::sendRequest(const QJsonObject &request, std::function<void(c
     QJsonDocument doc(request);
     QByteArray jsonData = doc.toJson(QJsonDocument::Compact);
 
-    qDebug() << "Sending request:" << doc.toJson();
+    qDebug() << "Sending request:" << doc.toJson() << Qt::endl;
 
     jsonData.append('\n');
 
@@ -291,7 +291,7 @@ void BackendClient::sendRequest(const QJsonObject &request, std::function<void(c
 
     connect(this, &BackendClient::serverResponseReceived, this, [callback, this](const QJsonObject &response)
             {
-        qDebug() << "Received response:" << response;
+        qDebug() << "Received response:" << response << Qt::endl;
         callback(response);
         // Disconnect after handling this response
         disconnect(this, &BackendClient::serverResponseReceived, this, nullptr); });
@@ -300,44 +300,55 @@ void BackendClient::sendRequest(const QJsonObject &request, std::function<void(c
 void BackendClient::onConnected()
 {
     connected = true;
-    qDebug() << "Connected to backend server";
+    qDebug() << "Connected to backend server" << Qt::endl;
 }
 
 void BackendClient::onDisconnected()
 {
     connected = false;
-    qDebug() << "Disconnected from backend server";
+    qDebug() << "Disconnected from backend server" << Qt::endl;
 }
 
 void BackendClient::onError(QAbstractSocket::SocketError socketError)
 {
     QString errorMsg = socket->errorString();
-    qDebug() << "Socket error: " << errorMsg;
+    qDebug() << "Socket error: " << errorMsg << Qt::endl;
     emit connectionError(errorMsg);
 }
 
 void BackendClient::onReadyRead()
 {
-    // Read all available data
     QByteArray jsonData = socket->readAll();
-    qDebug() << "Received data:" << jsonData;
+    qDebug() << "Received data:" << jsonData << Qt::endl;
 
-    QJsonDocument doc = QJsonDocument::fromJson(jsonData);
-    if (doc.isNull())
+    QList<QByteArray> messages = jsonData.split('\n');
+
+    for (const QByteArray &message : messages)
     {
-        qDebug() << "Invalid JSON received";
-        return;
-    }
+        QByteArray trimmed = message.trimmed();
+        if (trimmed.isEmpty())
+            continue;
 
-    QJsonObject response = doc.object();
-    emit serverResponseReceived(response);
+        QJsonParseError parseError;
+        QJsonDocument doc = QJsonDocument::fromJson(trimmed, &parseError);
+
+        if (doc.isNull())
+        {
+            qDebug() << "Invalid JSON part received:" << trimmed;
+            qDebug() << "Parse error:" << parseError.errorString() << Qt::endl;
+            continue;
+        }
+
+        QJsonObject response = doc.object();
+        emit serverResponseReceived(response);
+    }
 }
 
 void BackendClient::updateFreelancerProfile(Freelancer *freelancer, std::function<void(bool)> callback)
 {
     if (!freelancer || freelancer->getUid().empty())
     {
-        qDebug() << "Error: Cannot update profile with empty UID";
+        qDebug() << "Error: Cannot update profile with empty UID" << Qt::endl;
         if (callback)
         {
             callback(false);
@@ -345,7 +356,7 @@ void BackendClient::updateFreelancerProfile(Freelancer *freelancer, std::functio
         return;
     }
 
-    qDebug() << "Updating freelancer profile for UID:" << QString::fromStdString(freelancer->getUid());
+    qDebug() << "Updating freelancer profile for UID:" << QString::fromStdString(freelancer->getUid()) << Qt::endl;
 
     QJsonObject request;
     request["type"] = "updateProfile";
@@ -518,7 +529,7 @@ void BackendClient::getJobs(std::function<void(bool, std::vector<Job>)> callback
 {
     QJsonObject request;
     request["type"] = "getJobs";
-    qDebug() << "get Jobs backend request";
+    qDebug() << "get Jobs backend request" << Qt::endl;
     sendRequest(request,
                 [callback](const QJsonObject &response)
                 {
@@ -530,7 +541,7 @@ void BackendClient::getJobs(std::function<void(bool, std::vector<Job>)> callback
                         QJsonArray arr = response["jobs"].toArray();
                         jobs.reserve(arr.size());
 
-                        qDebug() << "Parsing jobs, count:" << arr.size();
+                        qDebug() << "Parsing jobs, count:" << arr.size() << Qt::endl;
                         for (auto v : arr)
                         {
                             QJsonObject o = v.toObject();
@@ -559,11 +570,11 @@ void BackendClient::getJobs(std::function<void(bool, std::vector<Job>)> callback
                                 skills,
                                 payment));
                         }
-                        qDebug() << "Jobs parsed:" << jobs.size();
+                        qDebug() << "Jobs parsed:" << jobs.size() << Qt::endl;
                     }
                     else
                     {
-                        qDebug() << "Request failed - getJobs";
+                        qDebug() << "Request failed - getJobs" << Qt::endl;
                     }
 
                     callback(success, jobs);
@@ -578,7 +589,7 @@ void BackendClient::applyForJob(Job &job, Proposal &proposal, std::function<void
 {
     QJsonObject request;
     request["type"] = "applyForJob";
-    qDebug() << "Apply Jobs backend request";
+    qDebug() << "Apply Jobs backend request" << Qt::endl;
     request["jobId"] = QString::fromStdString(job.getJobId());
     request["AcceptedFreelancer"] = QString::fromStdString(job.getAcceptedFreelancerUid());
     request["proposalDescription"] = QString::fromStdString(proposal.getProposalText());
@@ -604,7 +615,7 @@ void BackendClient::getProposals(const QString &employerId, std::function<void(b
     request["type"] = "getProposals";
     request["employerId"] = employerId;
 
-    qDebug() << "Getting proposals for employer ID:" << employerId;
+    qDebug() << "Getting proposals for employer ID:" << employerId << Qt::endl;
 
     sendRequest(request,
                 [callback](const QJsonObject &response)
@@ -614,12 +625,12 @@ void BackendClient::getProposals(const QString &employerId, std::function<void(b
                     if (success && response.contains("proposals"))
                     {
                         QJsonArray proposals = response["proposals"].toArray();
-                        qDebug() << "Retrieved" << proposals.size() << "proposals";
+                        qDebug() << "Retrieved" << proposals.size() << "proposals" << Qt::endl;
                         callback(true, proposals);
                     }
                     else
                     {
-                        qDebug() << "Failed to get proposals:" << response["error"].toString();
+                        qDebug() << "Failed to get proposals:" << response["error"].toString() << Qt::endl;
                         callback(false, QJsonArray());
                     }
                 });
@@ -645,7 +656,7 @@ void BackendClient::getAppliedJobs(const QString &freelancerId, std::function<vo
     QJsonObject request;
     request["type"] = "getAppliedJobs";
     request["freelancerId"] = freelancerId;
-    qDebug() << "Getting all Applied Jobs for:" << freelancerId;
+    qDebug() << "Getting all Applied Jobs for:" << freelancerId << Qt::endl;
 
     sendRequest(request,
                 [callback](const QJsonObject &response)
@@ -655,12 +666,12 @@ void BackendClient::getAppliedJobs(const QString &freelancerId, std::function<vo
                     if (success && response.contains("appliedJobs"))
                     {
                         QJsonArray appliedJobs = response["appliedJobs"].toArray();
-                        qDebug() << "Retrieved" << appliedJobs.size() << "applied jobs";
+                        qDebug() << "Retrieved" << appliedJobs.size() << "applied jobs" << Qt::endl;
                         callback(true, appliedJobs);
                     }
                     else
                     {
-                        qDebug() << "Failed to get applied jobs:" << response["error"].toString();
+                        qDebug() << "Failed to get applied jobs:" << response["error"].toString() << Qt::endl;
                         callback(false, QJsonArray());
                     }
                 });
@@ -678,6 +689,25 @@ void BackendClient::getApprovedJobs(const QString &freelancerId, std::function<v
     QJsonObject request;
     request["type"] = "getApprovedJobs";
     request["freelancerId"] = freelancerId;
+    qDebug() << "Getting all Approved Jobs for:" << freelancerId << Qt::endl;
+    sendRequest(request,
+            [callback](const QJsonObject &response)
+            {
+                bool success = (response["status"].toString() == "success");
+                
+                if (success && response.contains("approvedJobs"))
+                {
+                    QJsonArray approvedJobs = response["approvedJobs"].toArray();
+                    qDebug() << "Retrieved" << approvedJobs.size() << "approvedJobs" << Qt::endl;
+                    callback(true, approvedJobs);
+                }
+                else
+                {
+                    qDebug() << "Failed to get approved jobs:" << response["error"].toString() << Qt::endl;
+                    callback(false, QJsonArray());
+                }
+            });
+
 }
 
 /**********************
@@ -692,7 +722,7 @@ void BackendClient::getHiringManagerProfile(const QString &employerId, std::func
     request["type"]        = "getProfile";
     request["employerId"]  = employerId;
 
-    qDebug() << "Getting HiringManagerProfile for employer ID:" << employerId;
+    qDebug() << "Getting HiringManagerProfile for employer ID:" << employerId << Qt::endl;
 
     sendRequest(request,
         [callback](const QJsonObject &response) {

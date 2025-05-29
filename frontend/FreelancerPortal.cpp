@@ -269,10 +269,10 @@ QWidget *FreelancerPortal::createMessagesTab()
     QVBoxLayout *appliedJobsLayout = new QVBoxLayout();
 
     appliedJobsList = new QListWidget();
-    
+
     // Add placeholder while loading
     appliedJobsList->addItem("Loading applications...");
-    
+
     appliedJobsLayout->addWidget(appliedJobsList);
     appliedJobsGroup->setLayout(appliedJobsLayout);
 
@@ -387,9 +387,8 @@ QWidget *FreelancerPortal::createMessagesTab()
     messagesLayout->setRowStretch(1, 2); // Give more space to bottom row
 
     // Load data AFTER UI is completely set up - this prevents segfault
-    QTimer::singleShot(100, this, [this, approvedJobsList, jobTitleLabel, jobDescText, paymentLabel, 
-                                   proposalText, requestedAmountLabel, statusLabel, 
-                                   employerNameLabel, emailLabel, companyInfoText]() {
+    QTimer::singleShot(100, this, [this, approvedJobsList, jobTitleLabel, jobDescText, paymentLabel, proposalText, requestedAmountLabel, statusLabel, employerNameLabel, emailLabel, companyInfoText]()
+                       {
         try {
             BackendClient *client = BackendClient::getInstance();
             if (!client) {
@@ -398,29 +397,8 @@ QWidget *FreelancerPortal::createMessagesTab()
                 return;
             }
             
-            User *userFromBackend = client->getCurrentUser();
-            User* userToQuery = nullptr;
+            User* userToQuery = UserManager::getInstance()->getCurrentUser();
 
-            qDebug() << "FreelancerPortal::createMessagesTab timer: Portal currentUser:" << this->currentUser;
-
-            // Determine the correct user pointer to use
-
-            userToQuery = this->currentUser; 
-
-            // Final check on the chosen userToQuery
-            if (userToQuery == nullptr) {
-                qDebug() << "Error: Could not determine a valid user to query after checks. Aborting data load.";
-                 if (appliedJobsList) {
-                    appliedJobsList->clear();
-                    appliedJobsList->addItem("Session error. Please log in again.");
-                }
-                if (approvedJobsList) {
-                    approvedJobsList->clear();
-                    approvedJobsList->addItem("Session error. Please log in again.");
-                }
-                return;
-            }
-            
             std::string userIdStr;
             try {
                 qDebug() << "FreelancerPortal::createMessagesTab timer: Attempting to get UID for user:" << userToQuery;
@@ -444,27 +422,30 @@ QWidget *FreelancerPortal::createMessagesTab()
                 qDebug() << "Unknown exception when getting user UID in timer lambda for user:" << userToQuery;
                 if (appliedJobsList) {
                     appliedJobsList->clear();
-// ...existing code...
                     appliedJobsList->addItem("Unknown error accessing user data. Please log in again.");
                 }
                 return;
             }
-            
             QString freelancerId = QString::fromStdString(userIdStr);
+        
             
             // Ensure client and appliedJobsList are valid before use in nested lambdas
             if (client && appliedJobsList) {
-                client->getAppliedJobs(freelancerId, [this](bool success, const QJsonArray &jobsArray) { // Capture appliedJobsList
+                client->getAppliedJobs(freelancerId, [this, approvedJobsList, client, freelancerId, jobTitleLabel, 
+                                                    jobDescText, paymentLabel, proposalText, requestedAmountLabel, 
+                                                    statusLabel, employerNameLabel, emailLabel, companyInfoText](bool success, const QJsonArray &response) {
                     if (!this->currentUser) { 
                         qDebug() << "getAppliedJobs callback: Portal user logged out. Not updating UI.";
                         return;
                     }
+                    
+                    // Update the applied jobs list - the response is already the jobs array
                     if (success) {
                         appliedJobsList->clear();
-                        if (jobsArray.isEmpty()) {
+                        if (response.isEmpty()) {
                             appliedJobsList->addItem("No applications submitted yet");
                         } else {
-                            for (const QJsonValue& jobValue : jobsArray) {
+                            for (const QJsonValue& jobValue : response) {
                                 QJsonObject job = jobValue.toObject();
                                 QString jobTitle = job["jobTitle"].toString();
                                 QString employer = job["employerId"].toString();
@@ -479,38 +460,39 @@ QWidget *FreelancerPortal::createMessagesTab()
                         appliedJobsList->clear();
                         appliedJobsList->addItem("Failed to load applied jobs");
                     }
-                });
-            }
-            
-            // Load approved jobs (ensure client and approvedJobsList are valid)
-            if (client && approvedJobsList) {
-                client->getApprovedJobs(freelancerId, [this, approvedJobsList](bool success, const QJsonArray &jobsArray) {
-                     if (!this->currentUser) { 
-                        qDebug() << "getApprovedJobs callback: Portal user logged out. Not updating UI.";
-                        return;
-                    }
-                    if (success) {
-                        approvedJobsList->clear();
-                        if (jobsArray.isEmpty()) {
-                            approvedJobsList->addItem("No approved jobs yet");
-                        } else {
-                            for (const QJsonValue& jobValue : jobsArray) {
-                                QJsonObject job = jobValue.toObject();
-                                QString jobTitle = job["jobTitle"].toString();
-                                QString employer = job["employerId"].toString();
-                                QString displayText = "✓ " + jobTitle + " at " + employer;
-                                QListWidgetItem* item = new QListWidgetItem(displayText);
-                                item->setData(Qt::UserRole, QVariant(job));
-                                approvedJobsList->addItem(item);
+                    
+                    // IMPORTANT: Only call getApprovedJobs after the first API call completes
+                    if (client && approvedJobsList) {
+                        client->getApprovedJobs(freelancerId, [this, approvedJobsList](bool success, const QJsonArray &response) {
+                            if (!this->currentUser) {
+                                qDebug() << "getApprovedJobs callback: Portal user logged out. Not updating UI.";
+                                return;
                             }
-                        }
-                    } else {
-                        approvedJobsList->clear();
-                        approvedJobsList->addItem("Failed to load approved jobs");
+                            
+                            // The response is already the jobs array
+                            if (success) {
+                                approvedJobsList->clear();
+                                if (response.isEmpty()) {
+                                    approvedJobsList->addItem("No approved jobs yet");
+                                } else {
+                                    for (const QJsonValue& jobValue : response) {
+                                        QJsonObject job = jobValue.toObject();
+                                        QString jobTitle = job["jobTitle"].toString();
+                                        QString employer = job["employerId"].toString();
+                                        QString displayText = "✓ " + jobTitle + " at " + employer;
+                                        QListWidgetItem* item = new QListWidgetItem(displayText);
+                                        item->setData(Qt::UserRole, QVariant(job));
+                                        approvedJobsList->addItem(item);
+                                    }
+                                }
+                            } else {
+                                approvedJobsList->clear();
+                                approvedJobsList->addItem("Failed to load approved jobs");
+                            }
+                        });
                     }
                 });
             }
-            
         } catch (const std::exception& e) {
             qDebug() << "Outer exception in createMessagesTab timer callback:" << e.what();
             if (appliedJobsList) {
@@ -523,8 +505,7 @@ QWidget *FreelancerPortal::createMessagesTab()
                 appliedJobsList->clear();
                 appliedJobsList->addItem("Unknown error loading data. Please try again.");
             }
-        }
-    });
+        } });
 
     return messagesWidget;
 }
