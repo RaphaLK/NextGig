@@ -27,6 +27,7 @@ private:
   QListWidget* skillsListWidget;
   QListWidget* jobHistoryList;
   QListWidget* accomplishmentsList;
+  QListWidget* appliedJobsList;
   
   // Current user data
   User* currentUser;

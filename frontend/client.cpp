@@ -60,7 +60,7 @@ void BackendClient::disconnectFromServer()
         }
 
         connected = false;
-        qDebug() << "Client disconnected from server";
+        qDebug() << "Client disconnected from server" << Qt::endl;
     }
 }
 
@@ -281,7 +281,7 @@ void BackendClient::sendRequest(const QJsonObject &request, std::function<void(c
     QJsonDocument doc(request);
     QByteArray jsonData = doc.toJson(QJsonDocument::Compact);
 
-    qDebug() << "Sending request:" << doc.toJson();
+    qDebug() << "Sending request:" << doc.toJson() << Qt::endl;
 
     jsonData.append('\n');
 
@@ -291,7 +291,7 @@ void BackendClient::sendRequest(const QJsonObject &request, std::function<void(c
 
     connect(this, &BackendClient::serverResponseReceived, this, [callback, this](const QJsonObject &response)
             {
-        qDebug() << "Received response:" << response;
+        qDebug() << "Received response:" << response << Qt::endl;
         callback(response);
         // Disconnect after handling this response
         disconnect(this, &BackendClient::serverResponseReceived, this, nullptr); });
@@ -300,51 +300,64 @@ void BackendClient::sendRequest(const QJsonObject &request, std::function<void(c
 void BackendClient::onConnected()
 {
     connected = true;
-    qDebug() << "Connected to backend server";
+    qDebug() << "Connected to backend server" << Qt::endl;
 }
 
 void BackendClient::onDisconnected()
 {
     connected = false;
-    qDebug() << "Disconnected from backend server";
+    qDebug() << "Disconnected from backend server" << Qt::endl;
 }
 
 void BackendClient::onError(QAbstractSocket::SocketError socketError)
 {
     QString errorMsg = socket->errorString();
-    qDebug() << "Socket error: " << errorMsg;
+    qDebug() << "Socket error: " << errorMsg << Qt::endl;
     emit connectionError(errorMsg);
 }
 
 void BackendClient::onReadyRead()
 {
-    // Read all available data
     QByteArray jsonData = socket->readAll();
-    qDebug() << "Received data:" << jsonData;
+    qDebug() << "Received data:" << jsonData << Qt::endl;
 
-    QJsonDocument doc = QJsonDocument::fromJson(jsonData);
-    if (doc.isNull())
+    QList<QByteArray> messages = jsonData.split('\n');
+
+    for (const QByteArray &message : messages)
     {
-        qDebug() << "Invalid JSON received";
-        return;
-    }
+        QByteArray trimmed = message.trimmed();
+        if (trimmed.isEmpty())
+            continue;
 
-    QJsonObject response = doc.object();
-    emit serverResponseReceived(response);
+        QJsonParseError parseError;
+        QJsonDocument doc = QJsonDocument::fromJson(trimmed, &parseError);
+
+        if (doc.isNull())
+        {
+            qDebug() << "Invalid JSON part received:" << trimmed;
+            qDebug() << "Parse error:" << parseError.errorString() << Qt::endl;
+            continue;
+        }
+
+        QJsonObject response = doc.object();
+        emit serverResponseReceived(response);
+    }
 }
 
 void BackendClient::updateFreelancerProfile(Freelancer *freelancer, std::function<void(bool)> callback)
 {
-    if (!freelancer || freelancer->getUid().empty()) {
-        qDebug() << "Error: Cannot update profile with empty UID";
-        if (callback) {
+    if (!freelancer || freelancer->getUid().empty())
+    {
+        qDebug() << "Error: Cannot update profile with empty UID" << Qt::endl;
+        if (callback)
+        {
             callback(false);
         }
         return;
     }
-    
-    qDebug() << "Updating freelancer profile for UID:" << QString::fromStdString(freelancer->getUid());
-    
+
+    qDebug() << "Updating freelancer profile for UID:" << QString::fromStdString(freelancer->getUid()) << Qt::endl;
+
     QJsonObject request;
     request["type"] = "updateProfile";
     request["uid"] = QString::fromStdString(freelancer->getUid());
@@ -516,7 +529,7 @@ void BackendClient::getJobs(std::function<void(bool, std::vector<Job>)> callback
 {
     QJsonObject request;
     request["type"] = "getJobs";
-    qDebug() << "get Jobs backend request";
+    qDebug() << "get Jobs backend request" << Qt::endl;
     sendRequest(request,
                 [callback](const QJsonObject &response)
                 {
@@ -528,7 +541,7 @@ void BackendClient::getJobs(std::function<void(bool, std::vector<Job>)> callback
                         QJsonArray arr = response["jobs"].toArray();
                         jobs.reserve(arr.size());
 
-                        qDebug() << "Parsing jobs, count:" << arr.size();
+                        qDebug() << "Parsing jobs, count:" << arr.size() << Qt::endl;
                         for (auto v : arr)
                         {
                             QJsonObject o = v.toObject();
@@ -557,13 +570,310 @@ void BackendClient::getJobs(std::function<void(bool, std::vector<Job>)> callback
                                 skills,
                                 payment));
                         }
-                        qDebug() << "Jobs parsed:" << jobs.size();
+                        qDebug() << "Jobs parsed:" << jobs.size() << Qt::endl;
                     }
                     else
                     {
-                        qDebug() << "Request failed - getJobs";
+                        qDebug() << "Request failed - getJobs" << Qt::endl;
                     }
 
                     callback(success, jobs);
                 });
+}
+
+// —————————————————
+// APPLY FOR JOB
+// —————————————————
+// Extend Job document in Firebase with Proposal
+void BackendClient::applyForJob(Job &job, Proposal &proposal, std::function<void(bool)> callback)
+{
+    QJsonObject request;
+    request["type"] = "applyForJob";
+    qDebug() << "Apply Jobs backend request" << Qt::endl;
+    request["jobId"] = QString::fromStdString(job.getJobId());
+    request["AcceptedFreelancer"] = QString::fromStdString(job.getAcceptedFreelancerUid());
+    request["proposalDescription"] = QString::fromStdString(proposal.getProposalText());
+    request["budgetRequest"] = QString::fromStdString(proposal.getBudgetRequested());
+    request["freelancerUid"] = QString::fromStdString(proposal.getUid());
+
+    sendRequest(request,
+                [callback](const QJsonObject &response)
+                {
+                    bool success = (response["status"].toString() == "success");
+                    callback(success);
+                });
+}
+
+/*************
+ * GET ALL PROPOSALS
+ * -------------------
+ * Look for every job with a uid field that matches the employer's username. Then, retrieve the entire job back
+ */
+void BackendClient::getProposals(const QString &employerId, std::function<void(bool, const QJsonArray &)> callback)
+{
+    QJsonObject request;
+    request["type"] = "getProposals";
+    request["employerId"] = employerId;
+
+    qDebug() << "Getting proposals for employer ID:" << employerId << Qt::endl;
+
+    sendRequest(request,
+                [callback](const QJsonObject &response)
+                {
+                    bool success = (response["status"].toString() == "success");
+
+                    if (success && response.contains("proposals"))
+                    {
+                        QJsonArray proposals = response["proposals"].toArray();
+                        qDebug() << "Retrieved" << proposals.size() << "proposals" << Qt::endl;
+                        callback(true, proposals);
+                    }
+                    else
+                    {
+                        qDebug() << "Failed to get proposals:" << response["error"].toString() << Qt::endl;
+                        callback(false, QJsonArray());
+                    }
+                });
+}
+/***************
+ * GET FREELANCER PROFILE
+ * --------------------------------
+ * Retrieve the freelancer profile based on a UID
+ */
+
+/****
+ * GET FREELANCER's APPLIED JOBS
+ * --------
+ * Given Freelancer UID -- Find jobs where that they are APPLIED for for will show in Proposal list
+ *  -- show if rejected/pending
+ * do not show if accepted
+ * 
+ * Applied jobs can be checked through the proposals array field in each job and the freelancer's UID needs to be matched in the proposal
+ */
+
+void BackendClient::getAppliedJobs(const QString &freelancerId, std::function<void(bool, const QJsonArray &)> callback)
+{
+    QJsonObject request;
+    request["type"] = "getAppliedJobs";
+    request["freelancerId"] = freelancerId;
+    qDebug() << "Getting all Applied Jobs for:" << freelancerId << Qt::endl;
+
+    sendRequest(request,
+                [callback](const QJsonObject &response)
+                {
+                    bool success = (response["status"].toString() == "success");
+                    
+                    if (success && response.contains("appliedJobs"))
+                    {
+                        QJsonArray appliedJobs = response["appliedJobs"].toArray();
+                        qDebug() << "Retrieved" << appliedJobs.size() << "applied jobs" << Qt::endl;
+                        callback(true, appliedJobs);
+                    }
+                    else
+                    {
+                        qDebug() << "Failed to get applied jobs:" << response["error"].toString() << Qt::endl;
+                        callback(false, QJsonArray());
+                    }
+                });
+}
+/******
+ *
+ *
+ * GET FREELANCER's APPROVED JOBS
+ * ---------
+ * Given Freelancer UID -- Find jobs that they APPROVED for will be in proposal's approvedFreelancer
+ */
+
+void BackendClient::getApprovedJobs(const QString &freelancerId, std::function<void(bool, const QJsonArray &)> callback)
+{
+    QJsonObject request;
+    request["type"] = "getApprovedJobs";
+    request["freelancerId"] = freelancerId;
+    qDebug() << "Getting all Approved Jobs for:" << freelancerId << Qt::endl;
+    sendRequest(request,
+            [callback](const QJsonObject &response)
+            {
+                bool success = (response["status"].toString() == "success");
+                
+                if (success && response.contains("approvedJobs"))
+                {
+                    QJsonArray approvedJobs = response["approvedJobs"].toArray();
+                    qDebug() << "Retrieved" << approvedJobs.size() << "approvedJobs" << Qt::endl;
+                    callback(true, approvedJobs);
+                }
+                else
+                {
+                    qDebug() << "Failed to get approved jobs:" << response["error"].toString() << Qt::endl;
+                    callback(false, QJsonArray());
+                }
+            });
+
+}
+
+/**********************
+ * GET HIRINGMANAGER PROFILE
+ * ---------------------------
+ * Retrieve the HiringManager profile based on UID
+ */
+
+void BackendClient::getHiringManagerProfile(const QString &employerId, std::function<void(bool, const QJsonArray &)> callback)
+{
+    QJsonObject request;
+    request["type"]        = "getProfile";
+    request["employerId"]  = employerId;
+
+    qDebug() << "Getting HiringManagerProfile for employer ID:" << employerId << Qt::endl;
+
+    sendRequest(request,
+        [callback](const QJsonObject &response) {
+            bool success = (response["status"].toString() == "success");
+
+            if (!success) {
+                qWarning() << "getProfile failed:" << response["error"].toString();
+                callback(false, QJsonArray());
+                return;
+            }
+
+            QJsonArray profileArray;
+            profileArray.append(response);
+            
+            // Return the array to the caller
+            callback(true, profileArray);
+        });
+}
+
+
+/***********************
+ * RESPOND TO PROPOSAL
+ * ---------------------
+ * Given a proposal of a certain JobId, set the approved freelancer and clear the proposals array
+ * OR delete the proposal from a certain freelancer
+ */
+
+ void BackendClient::respondToProposal(const QString &jobId,
+                                      const QString &freelancerId,
+                                      bool accept,
+                                      std::function<void(bool)> callback)
+{
+    QJsonObject request;
+    request["type"]         = "updateProposalStatus";
+    request["jobId"]        = jobId;
+    request["freelancerId"] = freelancerId;
+    request["status"]       = accept ? "accepted" : "rejected";
+
+    sendRequest(request, [callback](const QJsonObject &resp) {
+        bool ok = (resp["status"].toString() == "success");
+        callback(ok);
+    });
+}
+
+/*********************
+ * UPDATE JOB STATUS
+ * ---------------------------
+ * HiringManager can mark a job as pending, in-progress, or complete
+ * If complete, add this to the Freelancer's and Hiring Manager's "Completed Jobs" array
+ * TODO: update the "Fetch ALL Jobs to fetch only pending jobs"
+ */
+
+void BackendClient::updateJobStatus(const QString &jobId,
+                                    const QString &newStatus,
+                                    std::function<void(bool)> callback)
+{
+    QJsonObject request;
+    request["type"] = "updateJobStatus";
+    request["jobId"] = jobId;
+    request["status"] = newStatus;
+
+    sendRequest(request, [callback](const QJsonObject &resp)
+                {
+        bool ok = (resp["status"].toString() == "success");
+        callback(ok); });
+}
+
+/*********************
+ * UPDATE COMPLETED JOBS
+ * ----------------------------
+ * Update user document to add a Job to their Job Completion Array. Should have:
+ * - JobId
+ * - HiringManagerId
+ * - FreelancerId
+ * - Job Name
+ * - Job Description
+ * - Budget Requested
+ */
+
+void BackendClient::updateCompletedJobs(const QString &userId,
+                                        const QString &jobId,
+                                        const QString &hiringManagerId,
+                                        const QString &freelancerId,
+                                        const QString &jobName,
+                                        const QString &jobDescription,
+                                        double budgetRequested,
+                                        std::function<void(bool)> callback)
+{
+    QJsonObject request;
+    request["type"] = "updateCompletedJobs";
+    request["userId"] = userId;
+    request["jobId"] = jobId;
+    request["hiringManagerId"] = hiringManagerId;
+    request["freelancerId"] = freelancerId;
+    request["jobName"] = jobName;
+    request["jobDescription"] = jobDescription;
+    request["budgetRequested"] = budgetRequested;
+
+    sendRequest(request, [callback](const QJsonObject &resp)
+                {
+        bool ok = (resp["status"].toString() == "success");
+        callback(ok); });
+}
+
+/*********************
+ * RETRIEVE COMPLETED JOBS
+ * ----------------------------
+ * Depending if the user is a Freelancer or HiringManager, retrieve the HiringManagerId or FreelancerId since we need
+ * one type of user to rate the other. Name this under "ColleagueId". Return the entire array.
+ */
+void BackendClient::getCompletedJobs(const QString &userId,
+                                     bool asHiringManager,
+                                     std::function<void(bool, const QJsonArray &)> callback)
+{
+    QJsonObject request;
+    request["type"] = "getCompletedJobs";
+    if (asHiringManager)
+        request["hiringManagerId"] = userId;
+    else
+        request["freelancerId"] = userId;
+
+    sendRequest(request, [callback](const QJsonObject &resp)
+                {
+        bool success = (resp["status"].toString() == "success");
+        QJsonArray arr;
+        if (success && resp.contains("completedJobs") && resp["completedJobs"].isArray())
+            arr = resp["completedJobs"].toArray();
+        callback(success, arr); });
+}
+
+/************
+ * RATE OTHER USER
+ * ---------------------
+ * Allows user to RATE another user through this.
+ */
+
+void BackendClient::rateUser(const QString &fromUserId,
+                             const QString &colleagueId,
+                             int rating,
+                             const QString &comment,
+                             std::function<void(bool)> callback)
+{
+    QJsonObject request;
+    request["type"] = "rateUser";
+    request["fromUserId"] = fromUserId;
+    request["colleagueId"] = colleagueId;
+    request["rating"] = rating;
+    request["comment"] = comment;
+
+    sendRequest(request, [callback](const QJsonObject &resp)
+                {
+        bool ok = (resp["status"].toString() == "success");
+        callback(ok); });
 }

@@ -34,8 +34,10 @@ add_executable(NextGigFrontend
     UserManager.cpp
     HiringManagerProfileEdit.cpp
     AddJobDialog.h
+    TextInputDialog.cpp
     ../src/models/Job.cpp
     ../src/models/User.cpp 
+    ../src/models/Proposal.cpp
 )
 
 target_include_directories(NextGigFrontend PRIVATE 

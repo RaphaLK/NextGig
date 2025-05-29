@@ -16,6 +16,7 @@
 #include <QSpacerItem>
 #include "UserManager.h"
 #include "Job.h"
+#include "TextInputDialog.h"
 #include <fstream> // Add at the top of your file
 
 JobFeed::JobFeed(QWidget *parent, bool showApplyButtons)
@@ -344,16 +345,13 @@ void JobFeed::onApplyClicked()
     return;
   }
 
-  // Check if user is logged in
   UserManager *userManager = UserManager::getInstance();
-  // Add null checks before attempting to access the user
   if (!userManager->isUserLoggedIn() || !userManager->getCurrentFreelancer())
   {
     QMessageBox::warning(this, "Login Required", "You must be logged in as a freelancer to apply for jobs");
     return;
   }
 
-  // Confirm application
   QMessageBox::StandardButton confirm = QMessageBox::question(
       this, "Confirm Application",
       "Are you sure you want to apply for this job?",
@@ -361,15 +359,70 @@ void JobFeed::onApplyClicked()
 
   if (confirm == QMessageBox::Yes)
   {
-    // In a real app, you'd call your backend to submit the application
-    // For now, we'll just show a success message
-    QMessageBox::information(this, "Application Submitted",
-                             "Your application has been submitted successfully!");
-
-    // Disable the apply button to prevent multiple applications
-    if (applyButton)
+    // Show the custom text input dialog
+    TextInputDialog dialog(this);
+    if (dialog.exec() == QDialog::Accepted)
     {
-      applyButton->setEnabled(false);
+      QString message = dialog.getInputText();
+      QString budget = dialog.getBudgetText();
+
+      // Here you would send `message` along with `currentJobId` and user ID to Firebase or your backend
+      qDebug() << "Applying to job with ID:" << QString::fromStdString(currentJobId)
+               << "with message:" << message;
+
+      // For now, show success message
+      BackendClient *client = BackendClient::getInstance();
+
+      Job* selectedJob = nullptr;
+      bool foundJob = false;
+      for (const auto &job : filteredJobs)
+      {
+        if (job.getJobId() == currentJobId)
+        {
+          selectedJob = new Job(job); // Create a copy of the job
+          foundJob = true;
+          break;
+        }
+      }
+
+      if (!foundJob) {
+        QMessageBox::warning(this, "Error", "Could not find the selected job");
+        return;
+      }
+      
+      string uid = UserManager::getInstance()->getCurrentUser()->getUid();
+      // Create the proposal object (use a stack variable instead of a pointer)
+      Proposal proposal(message.toStdString(), uid, budget.toStdString());
+      
+      // For improved user experience, show a loading indicator or disable the button
+      if (applyButton) {
+        applyButton->setEnabled(false);
+        applyButton->setText("Submitting...");
+      }
+
+      client->applyForJob(*selectedJob, proposal, [this, selectedJob](bool success) {
+        // Re-enable the button regardless of outcome
+        if (applyButton) {
+          applyButton->setEnabled(true);
+          applyButton->setText("Apply for Job");
+        }
+        
+        if (success) {
+          QMessageBox::information(this, "Application Submitted",
+                                 "Your application has been submitted successfully!");
+          
+          // Disable the apply button after successful submission
+          if (applyButton) {
+            applyButton->setEnabled(false);
+          }
+        } else {
+          QMessageBox::warning(this, "Application Failed",
+                             "Failed to submit your application. Please try again.");
+        }
+        
+        // Clean up the allocated job object
+        delete selectedJob;
+      });
     }
   }
 }
