@@ -19,7 +19,12 @@ public:
     // Constructor takes an optional flag to determine if apply buttons should be shown
     // (true for freelancers, false for hiring managers)
     explicit JobFeed(QWidget *parent = nullptr, bool showApplyButtons = true);
-    
+    void setupUI();
+    void loadJobs();
+    void addJob();
+    void applyToJob();
+    void onAddJobClicked();
+    void displayFilteredJobs();
     // Call this to refresh the job list
     void refreshJobs();
     void updateJobList(const std::vector<Job> &jobs);
@@ -55,11 +60,6 @@ private:
     bool showApplyButtons;
     
     // Helper methods
-    void setupUI();
-    void loadJobs();
-    void addJob();
-    void applyToJob();
-    void onAddJobClicked();
-    void displayFilteredJobs();
+
 
 };

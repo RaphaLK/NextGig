@@ -17,7 +17,8 @@
 #include "UserManager.h"
 #include "Job.h"
 #include "TextInputDialog.h"
-#include <fstream> // Add at the top of your file
+#include <QPointer>
+#include <fstream>
 
 JobFeed::JobFeed(QWidget *parent, bool showApplyButtons)
     : QWidget(parent), showApplyButtons(showApplyButtons)
@@ -166,49 +167,69 @@ void JobFeed::loadJobs()
 {
   qDebug() << "Loading jobs function called";
   // Show loading indicator
+  if (!jobsList) {
+    qWarning() << "JobFeed::loadJobs - jobsList is null before loading. UI not set up correctly.";
+    return;
+  }
   jobsList->clear();
   QListWidgetItem *loadingItem = new QListWidgetItem("Loading jobs...");
   loadingItem->setFlags(loadingItem->flags() & ~Qt::ItemIsEnabled);
   jobsList->addItem(loadingItem);
 
-  // Get jobs from backend
   BackendClient *client = BackendClient::getInstance();
-  client->getJobs([this](bool success, std::vector<Job> jobs)
-                  {
-        // Clear loading indicator
-        jobsList->clear();
+  QPointer<JobFeed> weakSelf = this; // Create a weak pointer to this object
+
+  client->getJobs([weakSelf](bool success, std::vector<Job> jobs) {
+    // Check if the JobFeed instance still exists
+    if (!weakSelf) {
+      qDebug() << "JobFeed instance destroyed before getJobs callback executed. Aborting UI update.";
+      return;
+    }
+
+    if (!weakSelf->jobsList) {
+      qWarning() << "JobFeed::loadJobs - jobsList is null after callback. Aborting UI update.";
+      return;
+    }
+
+    weakSelf->jobsList->clear();
         
         if (!success) {
             QListWidgetItem* errorItem = new QListWidgetItem("Failed to load jobs");
             errorItem->setFlags(errorItem->flags() & ~Qt::ItemIsEnabled);
-            jobsList->addItem(errorItem);
+            weakSelf->jobsList->addItem(errorItem);
             return;
         }        
         if (jobs.empty()) {
             QListWidgetItem* emptyItem = new QListWidgetItem("No jobs available");
             emptyItem->setFlags(emptyItem->flags() & ~Qt::ItemIsEnabled);
-            jobsList->addItem(emptyItem);
+            weakSelf->jobsList->addItem(emptyItem);
             return;
         }
         
-        allJobs = jobs;
+        weakSelf->allJobs = jobs;
 
-        if(!showApplyButtons)
+        if(!weakSelf->showApplyButtons)
         {
-            std::string currentUid = UserManager::getInstance()->getCurrentHiringManager()->getName();
-
-            std::vector<Job> filteredJobs;
-            for (const auto &job : allJobs)
-            {
-                if (job.getEmployer() == currentUid) // Ensure Job class has getEmployerUid()
+            // This block seems intended for Hiring Manager's view of their own jobs
+            HiringManager* currentHM = UserManager::getInstance()->getCurrentHiringManager();
+            if (currentHM) {
+                std::string currentUid = currentHM->getName(); // Assuming getName() provides a comparable ID/employer name
+                std::vector<Job> filteredManagerJobs;
+                for (const auto &job : weakSelf->allJobs)
                 {
-                    filteredJobs.push_back(job);
+                    if (QString::fromStdString(job.getEmployer()).toStdString() == currentUid) 
+                    {
+                        filteredManagerJobs.push_back(job);
+                    }
                 }
+                weakSelf->allJobs = filteredManagerJobs; // Update allJobs to only contain the manager's jobs
+            } else {
+                 qWarning() << "JobFeed: In Hiring Manager view (showApplyButtons=false) but no current Hiring Manager found. Displaying no jobs.";
+                 weakSelf->allJobs.clear(); // Clear jobs if no HM is identified in HM view
             }
-            allJobs = filteredJobs;
         }
-
-        displayFilteredJobs(); });
+        weakSelf->displayFilteredJobs(); 
+    });
 }
 
 void JobFeed::displayFilteredJobs()

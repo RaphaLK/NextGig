@@ -4,6 +4,7 @@
 // #include "../src/models/User.h"
 #include <QVBoxLayout>
 #include <QHBoxLayout>
+#include <QGridLayout> // Ensure this is present
 #include <QLabel>
 #include <QPushButton>
 #include <QListWidget>
@@ -12,23 +13,27 @@
 #include <QScrollArea>
 #include <QGroupBox>
 #include <QTabWidget>
+#include <QTextEdit> // Added
 #include <QMessageBox>
 #include "FreelancerProfileEdit.h"
 #include "UserManager.h"
 #include "JobFeed.h"
 #include "Proposal.h"
 #include <QTimer>
+#include <QFont> // Added
+#include <QDebug>
 
 FreelancerPortal::FreelancerPortal(QWidget *parent) : QWidget(parent), currentUser(nullptr)
 {
+    jobFeedWidget = nullptr;
+    
     QVBoxLayout *mainLayout = new QVBoxLayout(this);
     mainLayout->addWidget(renderFreelancerPortal());
     setLayout(mainLayout);
     currentUser = UserManager::getInstance()->getCurrentUser();
-    if (currentUser)
-    {
-        updateProfileInfo();
-    }
+
+    // Initialize tabInitialized - assuming 3 tabs, all initially false
+    tabInitialized = QVector<bool>(3, false);
 }
 
 void FreelancerPortal::setCurrentUser(User *user)
@@ -36,7 +41,10 @@ void FreelancerPortal::setCurrentUser(User *user)
     currentUser = user;
     // Also update the UserManager
     UserManager::getInstance()->setCurrentUser(user);
-    updateProfileInfo();
+    QTimer::singleShot(0, this, [this]()
+                       {
+                           updateProfileInfo(); // Delay this to make sure UI exists
+                       });
 }
 
 void FreelancerPortal::updateProfileInfo()
@@ -44,7 +52,20 @@ void FreelancerPortal::updateProfileInfo()
     if (!currentUser)
         return;
 
+    // Check if UI elements are initialized before using them
+    if (!nameLabel || !descriptionTextEdit || !skillsListWidget ||
+        !jobHistoryList || !accomplishmentsList)
+    {
+        qDebug() << "UI elements not yet created, skipping updateProfileInfo()";
+        return;
+    }
+
     Freelancer *currentUser = UserManager::getInstance()->getCurrentFreelancer();
+    if (!currentUser)
+    {
+        qDebug() << "Current freelancer is null, skipping updateProfileInfo()";
+        return;
+    }
 
     nameLabel->setText(QString::fromStdString(currentUser->getName()));
     descriptionTextEdit->setPlainText(QString::fromStdString(currentUser->getDescription()));
@@ -55,7 +76,6 @@ void FreelancerPortal::updateProfileInfo()
     {
         skillsListWidget->addItem(QString::fromStdString(skill));
     }
-
     // Update job history
     jobHistoryList->clear();
     for (const auto &job : currentUser->getJobHistory())
@@ -76,21 +96,67 @@ void FreelancerPortal::updateProfileInfo()
 
 QWidget *FreelancerPortal::renderFreelancerPortal()
 {
-    QTabWidget *tabWidget = new QTabWidget();
+    tabWidget = new QTabWidget();
 
-    // Jobs Tab
-    QWidget *jobsTab = createJobsTab();
-    tabWidget->addTab(jobsTab, "Available Jobs");
+   connect(tabWidget, &QTabWidget::currentChanged, [this](int index) {
+        qDebug() << "Tab changed to index:" << index;
+        if (index < 0 || index >= tabInitialized.size()) {
+            return;
+        }
 
-    // Profile Tab
-    QWidget *profileTab = createProfileTab();
-    tabWidget->addTab(profileTab, "My Profile");
+        if (!tabInitialized[index]) {
+            tabWidget->setTabEnabled(index, false); // Disable tab during loading
+            
+            QTimer::singleShot(0, this, [this, index]() {
+                QWidget *contentWidget = nullptr;
+                QString tabName;
 
-    // Messages Tab
-    QWidget *messagesTab = createMessagesTab();
-    tabWidget->addTab(messagesTab, "Current Jobs");
+                switch (index) {
+                    case 0:
+                        contentWidget = createJobsTab();
+                        tabName = "Available Jobs";
+                        break;
+                    case 1:
+                        contentWidget = createProfileTab();
+                        tabName = "My Profile";
+                        break;
+                    case 2:
+                        contentWidget = createMessagesTab();
+                        tabName = "Current Jobs";
+                        break;
+                    default:
+                        tabWidget->setTabEnabled(index, true); // Re-enable if error
+                        return;
+                }
 
-    // Main Layout
+                if (contentWidget && tabWidget) { // Check if tabWidget still exists
+                    QWidget* placeholder = tabWidget->widget(index);
+                    tabWidget->removeTab(index);
+                    tabWidget->insertTab(index, contentWidget, tabName);
+                    if (placeholder) {
+                        placeholder->deleteLater();
+                    }
+                    tabWidget->setTabEnabled(index, true);
+                    tabInitialized[index] = true;
+
+                    // Special handling for data loading
+                    if (index == 2) { // Current Jobs tab
+                        loadCurrentJobsData();
+                    }
+                } else {
+                    if (tabWidget) {
+                        tabWidget->setTabEnabled(index, true); // Re-enable if content creation failed
+                    }
+                }
+            });
+        }
+    });
+    
+    // Add placeholder tabs initially
+    tabWidget->addTab(new QWidget(), "Available Jobs");
+    tabWidget->addTab(new QWidget(), "My Profile");
+    tabWidget->addTab(new QWidget(), "Current Jobs");
+    
     QVBoxLayout *mainLayout = new QVBoxLayout();
 
     // Header with welcome and logout
@@ -100,6 +166,7 @@ QWidget *FreelancerPortal::renderFreelancerPortal()
     welcomeFont.setPointSize(16);
     welcomeFont.setBold(true);
     welcomeLabel->setFont(welcomeFont);
+
 
     QPushButton *logoutBtn = new QPushButton("Logout");
     logoutBtn->setStyleSheet("padding: 8px; font-size: 13px; color: #fff; background: #d9534f;");
@@ -127,13 +194,29 @@ QWidget *FreelancerPortal::renderFreelancerPortal()
 
     QWidget *container = new QWidget();
     container->setLayout(mainLayout);
+    
+    QTimer::singleShot(50, this, [this]() {
+        if (tabWidget && tabWidget->count() > 0) {
+            emit tabWidget->currentChanged(0);
+        }
+    });
+
+
     return container;
 }
 
 QWidget *FreelancerPortal::createJobsTab()
 {
-    JobFeed *jobFeed = new JobFeed(this, true);
-    return jobFeed;
+  if (jobFeedWidget != nullptr) {
+    qDebug() << "Reusing existing JobFeed widget";
+    jobFeedWidget->loadJobs();
+    return jobFeedWidget;
+  }
+
+  qDebug() << "Creating new JobFeed widget";
+  // Create a new JobFeed widget and store it as a member
+  jobFeedWidget = new JobFeed(this, true);
+  return jobFeedWidget;
 }
 
 QWidget *FreelancerPortal::createProfileTab()
@@ -243,17 +326,22 @@ QWidget *FreelancerPortal::createProfileTab()
     FreelancerProfileEdit* dialog = new FreelancerProfileEdit(freelancer, this);
     
     connect(dialog, &FreelancerProfileEdit::profileUpdated, [this]() {
-        updateProfileInfo(); // Refresh the UI with updated info
+        QTimer::singleShot(0, this, [this]() {
+            updateProfileInfo();
+        });
     });
     
     dialog->exec();
     delete dialog; });
-    // Arrange everything in the profile tab
     profileLayout->addWidget(userInfoGroup);
     profileLayout->addWidget(skillsGroup);
     profileLayout->addWidget(historyGroup);
     profileLayout->addWidget(accomplishmentsGroup);
     profileLayout->addWidget(editProfileBtn, 0, Qt::AlignRight);
+
+    // Update profile info now that UI elements exist
+    QTimer::singleShot(0, this, [this]()
+                       { updateProfileInfo(); });
 
     return profileWidget;
 }
@@ -263,25 +351,22 @@ QWidget *FreelancerPortal::createMessagesTab()
     QWidget *messagesWidget = new QWidget();
     QGridLayout *messagesLayout = new QGridLayout(messagesWidget);
 
-    // 1. Top Left: Jobs Applied For
+    // 1. Jobs Applied For
     QGroupBox *appliedJobsGroup = new QGroupBox("Jobs Applied For");
     appliedJobsGroup->setStyleSheet("QGroupBox { font-weight: bold; font-size: 14px; }");
     QVBoxLayout *appliedJobsLayout = new QVBoxLayout();
 
-    appliedJobsList = new QListWidget();
-
-    // Add placeholder while loading
+    appliedJobsList = new QListWidget(); // Use class member
     appliedJobsList->addItem("Loading applications...");
-
     appliedJobsLayout->addWidget(appliedJobsList);
     appliedJobsGroup->setLayout(appliedJobsLayout);
 
-    // 2. Top Right: Approved Jobs
+    // 2. Approved Jobs
     QGroupBox *approvedJobsGroup = new QGroupBox("Approved Applications");
     approvedJobsGroup->setStyleSheet("QGroupBox { font-weight: bold; font-size: 14px; }");
     QVBoxLayout *approvedJobsLayout = new QVBoxLayout();
 
-    QListWidget *approvedJobsList = new QListWidget();
+    approvedJobsList = new QListWidget(); // Use class member
     approvedJobsList->addItem("Loading approved jobs...");
     approvedJobsList->setStyleSheet("QListWidget::item { padding: 8px; color: #28a745; }");
 
@@ -382,130 +467,124 @@ QWidget *FreelancerPortal::createMessagesTab()
     messagesLayout->setColumnStretch(0, 1);
     messagesLayout->setColumnStretch(1, 1);
     messagesLayout->setRowStretch(0, 1);
-    messagesLayout->setRowStretch(1, 2); // Give more space to bottom row
-    messagesLayout->setRowStretch(0, 1);
-    messagesLayout->setRowStretch(1, 2); // Give more space to bottom row
+    messagesLayout->setRowStretch(1, 2);
 
-    // Load data AFTER UI is completely set up - this prevents segfault
-    QTimer::singleShot(100, this, [this, approvedJobsList, jobTitleLabel, jobDescText, paymentLabel, proposalText, requestedAmountLabel, statusLabel, employerNameLabel, emailLabel, companyInfoText]()
-                       {
-        try {
-            BackendClient *client = BackendClient::getInstance();
-            if (!client) {
-                qDebug() << "Error: BackendClient instance is null in timer lambda.";
-                if (appliedJobsList) appliedJobsList->addItem("Error: Cannot connect to backend.");
-                return;
-            }
-            
-            User* userToQuery = UserManager::getInstance()->getCurrentUser();
-
-            std::string userIdStr;
-            try {
-                qDebug() << "FreelancerPortal::createMessagesTab timer: Attempting to get UID for user:" << userToQuery;
-                userIdStr = userToQuery->getUid(); 
-                if (userIdStr.empty()) {
-                    qDebug() << "Error: User UID is empty after retrieval in timer lambda for user:" << userToQuery;
-                    if (appliedJobsList) {
-                        appliedJobsList->clear();
-                        appliedJobsList->addItem("Invalid user data (empty UID). Please log in again.");
-                    }
+    // Connect signals to update UI when data is ready
+    connect(this, &FreelancerPortal::appliedJobsDataReady,
+            [this](const QJsonArray &jobs)
+            {
+                if (!this->currentUser)
                     return;
-                }
-            } catch (const std::exception& e) {
-                qDebug() << "Exception when getting user UID in timer lambda for user:" << userToQuery << "Error:" << e.what();
-                if (appliedJobsList) {
-                    appliedJobsList->clear();
-                    appliedJobsList->addItem("Error accessing user data. Please log in again.");
-                }
-                return;
-            } catch (...) {
-                qDebug() << "Unknown exception when getting user UID in timer lambda for user:" << userToQuery;
-                if (appliedJobsList) {
-                    appliedJobsList->clear();
-                    appliedJobsList->addItem("Unknown error accessing user data. Please log in again.");
-                }
-                return;
-            }
-            QString freelancerId = QString::fromStdString(userIdStr);
-        
-            
-            // Ensure client and appliedJobsList are valid before use in nested lambdas
-            if (client && appliedJobsList) {
-                client->getAppliedJobs(freelancerId, [this, approvedJobsList, client, freelancerId, jobTitleLabel, 
-                                                    jobDescText, paymentLabel, proposalText, requestedAmountLabel, 
-                                                    statusLabel, employerNameLabel, emailLabel, companyInfoText](bool success, const QJsonArray &response) {
-                    if (!this->currentUser) { 
-                        qDebug() << "getAppliedJobs callback: Portal user logged out. Not updating UI.";
-                        return;
-                    }
-                    
-                    // Update the applied jobs list - the response is already the jobs array
-                    if (success) {
-                        appliedJobsList->clear();
-                        if (response.isEmpty()) {
-                            appliedJobsList->addItem("No applications submitted yet");
-                        } else {
-                            for (const QJsonValue& jobValue : response) {
-                                QJsonObject job = jobValue.toObject();
-                                QString jobTitle = job["jobTitle"].toString();
-                                QString employer = job["employerId"].toString();
-                                
-                                QString displayText = jobTitle + " at " + employer;
-                                QListWidgetItem* item = new QListWidgetItem(displayText);
-                                item->setData(Qt::UserRole, QVariant(job));
-                                appliedJobsList->addItem(item);
-                            }
-                        }
-                    } else {
-                        appliedJobsList->clear();
-                        appliedJobsList->addItem("Failed to load applied jobs");
-                    }
-                    
-                    // IMPORTANT: Only call getApprovedJobs after the first API call completes
-                    if (client && approvedJobsList) {
-                        client->getApprovedJobs(freelancerId, [this, approvedJobsList](bool success, const QJsonArray &response) {
-                            if (!this->currentUser) {
-                                qDebug() << "getApprovedJobs callback: Portal user logged out. Not updating UI.";
-                                return;
-                            }
-                            
-                            // The response is already the jobs array
-                            if (success) {
-                                approvedJobsList->clear();
-                                if (response.isEmpty()) {
-                                    approvedJobsList->addItem("No approved jobs yet");
-                                } else {
-                                    for (const QJsonValue& jobValue : response) {
-                                        QJsonObject job = jobValue.toObject();
-                                        QString jobTitle = job["jobTitle"].toString();
-                                        QString employer = job["employerId"].toString();
-                                        QString displayText = "✓ " + jobTitle + " at " + employer;
-                                        QListWidgetItem* item = new QListWidgetItem(displayText);
-                                        item->setData(Qt::UserRole, QVariant(job));
-                                        approvedJobsList->addItem(item);
-                                    }
-                                }
-                            } else {
-                                approvedJobsList->clear();
-                                approvedJobsList->addItem("Failed to load approved jobs");
-                            }
-                        });
-                    }
-                });
-            }
-        } catch (const std::exception& e) {
-            qDebug() << "Outer exception in createMessagesTab timer callback:" << e.what();
-            if (appliedJobsList) {
+
                 appliedJobsList->clear();
-                appliedJobsList->addItem("Error loading data. Please try again.");
-            }
-        } catch (...) {
-            qDebug() << "Unknown outer exception in createMessagesTab timer callback";
-            if (appliedJobsList) {
-                appliedJobsList->clear();
-                appliedJobsList->addItem("Unknown error loading data. Please try again.");
-            }
-        } });
+                if (jobs.isEmpty())
+                {
+                    appliedJobsList->addItem("No applications submitted yet");
+                }
+                else
+                {
+                    for (const QJsonValue &jobValue : jobs)
+                    {
+                        QJsonObject job = jobValue.toObject();
+                        QString jobTitle = job["jobTitle"].toString();
+                        QString employer = job["employerId"].toString();
+
+                        QString displayText = jobTitle + " at " + employer;
+                        QListWidgetItem *item = new QListWidgetItem(displayText);
+                        item->setData(Qt::UserRole, QVariant(job));
+                        appliedJobsList->addItem(item);
+                    }
+                }
+            });
+
+    connect(this, &FreelancerPortal::approvedJobsDataReady,
+            [this](const QJsonArray &jobs)
+            {
+                if (!this->currentUser)
+                    return;
+
+                approvedJobsList->clear();
+                if (jobs.isEmpty())
+                {
+                    approvedJobsList->addItem("No approved jobs yet");
+                }
+                else
+                {
+                    for (const QJsonValue &jobValue : jobs)
+                    {
+                        QJsonObject job = jobValue.toObject();
+                        QString jobTitle = job["jobTitle"].toString();
+                        QString employer = job["employerId"].toString();
+                        QString displayText = "✓ " + jobTitle + " at " + employer;
+                        QListWidgetItem *item = new QListWidgetItem(displayText);
+                        item->setData(Qt::UserRole, QVariant(job));
+                        approvedJobsList->addItem(item);
+                    }
+                }
+                qDebug() << "Approved Jobs: " << jobs;
+            });
 
     return messagesWidget;
+}
+
+void FreelancerPortal::loadCurrentJobsData()
+{
+    try
+    {
+        BackendClient *client = BackendClient::getInstance();
+        if (!client)
+        {
+            qDebug() << "Error: BackendClient instance is null.";
+            emit appliedJobsDataReady(QJsonArray());
+            emit approvedJobsDataReady(QJsonArray());
+            return;
+        }
+
+        User *userToQuery = UserManager::getInstance()->getCurrentUser();
+
+        if (!userToQuery)
+        {
+            qDebug() << "Error: No current user found";
+            emit appliedJobsDataReady(QJsonArray());
+            emit approvedJobsDataReady(QJsonArray());
+            return;
+        }
+
+        QString freelancerId;
+        try
+        {
+            freelancerId = QString::fromStdString(userToQuery->getUid());
+            if (freelancerId.isEmpty())
+            {
+                qDebug() << "Error: User UID is empty";
+                emit appliedJobsDataReady(QJsonArray());
+                emit approvedJobsDataReady(QJsonArray());
+                return;
+            }
+        }
+        catch (const std::exception &e)
+        {
+            qDebug() << "Exception when getting user UID:" << e.what();
+            emit appliedJobsDataReady(QJsonArray());
+            emit approvedJobsDataReady(QJsonArray());
+            return;
+        }
+
+        // Get applied jobs data
+        client->getAppliedJobs(freelancerId, [this, client, freelancerId](bool success, const QJsonArray &response)
+                               {
+            // Emit signal regardless of success (empty array for failure)
+            emit appliedJobsDataReady(success ? response : QJsonArray());
+            
+            // Get approved jobs data after applied jobs are fetched
+            client->getApprovedJobs(freelancerId, [this](bool success, const QJsonArray &response) {
+                emit approvedJobsDataReady(success ? response : QJsonArray());
+            }); });
+    }
+    catch (const std::exception &e)
+    {
+        qDebug() << "Exception in loadCurrentJobsData:" << e.what();
+        emit appliedJobsDataReady(QJsonArray());
+        emit approvedJobsDataReady(QJsonArray());
+    }
 }
