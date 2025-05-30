@@ -323,60 +323,96 @@ QWidget *HiringManagerPortal::createDashboardTab()
     connect(incomingPrpsls, &QListWidget::currentItemChanged,
             [=](QListWidgetItem *current, QListWidgetItem *previous)
             {
-                if (current)
-                {
-                    // Enable action buttons
-                    viewDetailsBtn->setEnabled(true);
-                    acceptPrpslBtn->setEnabled(true);
-                    rejectPrpslBtn->setEnabled(true);
-
-                    // Get proposal data from the item's data role
-                    QVariantMap proposalData = current->data(Qt::UserRole).toMap();
-
-                    // Update job details
-                    jobTitleLabel->setText(proposalData["jobTitle"].toString());
-                    jobDescLabel->setText(proposalData["jobDescription"].toString());
-                    jobPaymentLabel->setText("$" + proposalData["payment"].toString());
-
-                    // Update freelancer details
-                    freelancerNameLabel->setText(proposalData["freelancerName"].toString());
-                    freelancerEmailLabel->setText(proposalData["freelancerEmail"].toString());
-                    freelancerSkillsLabel->setText(proposalData["freelancerSkills"].toString());
-
-                    // Update proposal content
-                    proposalText->setText(proposalData["proposalDescription"].toString());
-                    requestedBudgetLabel->setText("Requested Budget: " + proposalData["requestedBudget"].toString());
-
-                    QString status = proposalData["status"].toString();
-                    if (status == "pending")
-                    {
-                        proposalStatusLabel->setText("Status: Pending");
-                        proposalStatusLabel->setStyleSheet("font-weight: bold; color: #ffc107;");
-                        acceptPrpslBtn->setEnabled(true);
-                        rejectPrpslBtn->setEnabled(true);
-                    }
-                    else if (status == "accepted")
-                    {
-                        proposalStatusLabel->setText("Status: Accepted");
-                        proposalStatusLabel->setStyleSheet("font-weight: bold; color: #28a745;");
-                        acceptPrpslBtn->setEnabled(false);
-                        rejectPrpslBtn->setEnabled(true);
-                    }
-                    else if (status == "rejected")
-                    {
-                        proposalStatusLabel->setText("Status: Rejected");
-                        proposalStatusLabel->setStyleSheet("font-weight: bold; color: #dc3545;");
-                        acceptPrpslBtn->setEnabled(true);
-                        rejectPrpslBtn->setEnabled(false);
-                    }
-                }
-                else
-                {
-                    // Disable action buttons if no selection
-                    viewDetailsBtn->setEnabled(false);
-                    acceptPrpslBtn->setEnabled(false);
-                    rejectPrpslBtn->setEnabled(false);
-                }
+                // In the connect(incomingPrpsls, &QListWidget::currentItemChanged, ...) section:
+                connect(incomingPrpsls, &QListWidget::currentItemChanged,
+                        [=](QListWidgetItem *current, QListWidgetItem *previous)
+                        {
+                            if (current)
+                            {
+                                // Get proposal data from the item's data role
+                                QVariantMap proposalData = current->data(Qt::UserRole).toMap();
+                
+                                // Update job details
+                                jobTitleLabel->setText(proposalData["jobTitle"].toString());
+                                jobDescLabel->setText(proposalData["jobDescription"].toString());
+                                jobPaymentLabel->setText("$" + proposalData["payment"].toString());
+                
+                                // Update freelancer details
+                                freelancerNameLabel->setText(proposalData["freelancerName"].toString());
+                                freelancerEmailLabel->setText(proposalData["freelancerEmail"].toString());
+                                freelancerSkillsLabel->setText(proposalData["freelancerSkills"].toString());
+                
+                                // Update proposal content
+                                proposalText->setText(proposalData["proposalDescription"].toString());
+                                requestedBudgetLabel->setText("Requested Budget: " + proposalData["requestedBudget"].toString());
+                
+                                QString status = proposalData["status"].toString();
+                                
+                                if (status == "pending")
+                                {
+                                    proposalStatusLabel->setText("Status: Pending");
+                                    proposalStatusLabel->setStyleSheet("font-weight: bold; color: #ffc107;");
+                                    
+                                    // Show accept/reject buttons for pending proposals
+                                    viewDetailsBtn->setEnabled(true);
+                                    acceptPrpslBtn->setEnabled(true);
+                                    acceptPrpslBtn->setText("Accept Proposal");
+                                    acceptPrpslBtn->setStyleSheet("background-color: #28a745; color: white;");
+                                    rejectPrpslBtn->setEnabled(true);
+                                    rejectPrpslBtn->setText("Reject Proposal");
+                                    rejectPrpslBtn->setStyleSheet("background-color: #dc3545; color: white;");
+                                }
+                                else if (status == "accepted")
+                                {
+                                    proposalStatusLabel->setText("Status: Accepted - In Progress");
+                                    proposalStatusLabel->setStyleSheet("font-weight: bold; color: #28a745;");
+                                    
+                                    // Show complete job button for accepted proposals
+                                    viewDetailsBtn->setEnabled(true);
+                                    acceptPrpslBtn->setEnabled(true);
+                                    acceptPrpslBtn->setText("Complete Job");
+                                    acceptPrpslBtn->setStyleSheet("background-color: #17a2b8; color: white;"); // Blue color
+                                    rejectPrpslBtn->setEnabled(false);
+                                    rejectPrpslBtn->setText("Reject Proposal");
+                                    rejectPrpslBtn->setStyleSheet("background-color: #6c757d; color: white;"); // Disabled gray
+                                }
+                                else if (status == "rejected")
+                                {
+                                    proposalStatusLabel->setText("Status: Rejected");
+                                    proposalStatusLabel->setStyleSheet("font-weight: bold; color: #dc3545;");
+                                    
+                                    // Allow re-accepting rejected proposals
+                                    viewDetailsBtn->setEnabled(true);
+                                    acceptPrpslBtn->setEnabled(true);
+                                    acceptPrpslBtn->setText("Accept Proposal");
+                                    acceptPrpslBtn->setStyleSheet("background-color: #28a745; color: white;");
+                                    rejectPrpslBtn->setEnabled(false);
+                                    rejectPrpslBtn->setText("Reject Proposal");
+                                    rejectPrpslBtn->setStyleSheet("background-color: #6c757d; color: white;");
+                                }
+                                else if (status == "completed")
+                                {
+                                    proposalStatusLabel->setText("Status: Completed");
+                                    proposalStatusLabel->setStyleSheet("font-weight: bold; color: #6f42c1;"); // Purple
+                                    
+                                    // No actions available for completed jobs
+                                    viewDetailsBtn->setEnabled(true);
+                                    acceptPrpslBtn->setEnabled(false);
+                                    acceptPrpslBtn->setText("Job Completed");
+                                    acceptPrpslBtn->setStyleSheet("background-color: #6c757d; color: white;");
+                                    rejectPrpslBtn->setEnabled(false);
+                                    rejectPrpslBtn->setText("Reject Proposal");
+                                    rejectPrpslBtn->setStyleSheet("background-color: #6c757d; color: white;");
+                                }
+                            }
+                            else
+                            {
+                                // Disable action buttons if no selection
+                                viewDetailsBtn->setEnabled(false);
+                                acceptPrpslBtn->setEnabled(false);
+                                rejectPrpslBtn->setEnabled(false);
+                            }
+                        });
             });
 
     // Connect action buttons
