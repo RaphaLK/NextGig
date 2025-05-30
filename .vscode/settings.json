@@ -79,6 +79,7 @@
     "qtextedit": "cpp",
     "qlistwidget": "cpp",
     "qhboxlayout": "cpp",
-    "qscrollarea": "cpp"
+    "qscrollarea": "cpp",
+    "qtimer": "cpp"
   }
 }

@@ -17,4 +17,5 @@ public:
 private slots:
   void createAndShowHiringManagerPortal();
   void createAndShowFreelancerPortal();
+  void clearFreelancerPortal();
 };

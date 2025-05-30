@@ -11,6 +11,7 @@
 #include <QCheckBox>
 #include "../src/models/User.h"
 #include "UserManager.h"
+#include "JobFeed.h"
 class HiringManagerPortal : public QWidget
 {
   Q_OBJECT
@@ -32,6 +33,7 @@ private:
   void fetchProfileFromFirebase();
   void loadProposalsForHiringManager();
   void updateProposalStatus(const QString &jobId, const QString &freelancerId, const QString &status);
+
   // UI elements that need to be accessed from multiple methods
   QListWidget *incomingPrpsls;
   QLabel *nameLabel;
