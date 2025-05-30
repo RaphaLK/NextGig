@@ -313,18 +313,19 @@ void Server::handleClient(int clientSocket)
             {
                 std::string sizeStr = requestBuffer.substr(0, newlinePos);
                 requestBuffer = requestBuffer.substr(newlinePos + 1);
-                
+
                 // Try to parse the size
-                try {
+                try
+                {
                     int jsonSize = std::stoi(sizeStr);
-                    
+
                     // Check if we have enough data for the JSON object
                     if (static_cast<int>(requestBuffer.size()) >= jsonSize)
                     {
                         // Extract the JSON data
                         std::string jsonData = requestBuffer.substr(0, jsonSize);
                         requestBuffer = requestBuffer.substr(jsonSize);
-                        
+
                         // Process the request
                         processRequest(clientSocket, jsonData);
                     }
@@ -334,12 +335,12 @@ void Server::handleClient(int clientSocket)
                         break;
                     }
                 }
-                catch (const std::exception& e)
+                catch (const std::exception &e)
                 {
                     // Invalid size format, discard this line
                     std::cerr << "Invalid size format: " << sizeStr << std::endl;
                 }
-                
+
                 // Look for next size indicator
                 newlinePos = requestBuffer.find('\n');
             }
@@ -1174,161 +1175,208 @@ void Server::processRequest(int clientSocket, const std::string &request)
             .Get()
             .OnCompletion([=](const firebase::Future<firebase::firestore::QuerySnapshot> &fut)
                           {
-        QJsonObject response;
-        QJsonArray appliedJobs;
+    QJsonObject response;
+    QJsonArray appliedJobs;
 
-        if (fut.error() != firebase::firestore::kErrorOk) {
-            response["status"] = "error";
-            response["error"] = QString::fromStdString(fut.error_message());
-            sendResponse(clientSocket, QJsonDocument(response).toJson(QJsonDocument::Compact).toStdString());
-            return;
-        }
-
-        const auto *snapshot = fut.result();
-        for (const auto &doc : snapshot->documents()) {
-            QString jobId = QString::fromStdString(doc.id());
-            auto data = doc.GetData();
-
-            auto propIt = data.find("proposals");
-            if (propIt == data.end() || !propIt->second.is_array()) continue;
-
-            for (const auto &pv : propIt->second.array_value()) {
-                if (!pv.is_map()) continue;
-                const auto &propMap = pv.map_value();
-
-                auto fidIt = propMap.find("freelancerId");
-                if (fidIt == propMap.end() || !fidIt->second.is_string()) continue;
-
-                if (fidIt->second.string_value() != freelancerId.toStdString()) continue;
-
-                QJsonObject jobDetails;
-                jobDetails["jobId"] = jobId;
-
-                if (auto jt = data.find("JobTitle"); jt != data.end() && jt->second.is_string())
-                    jobDetails["jobTitle"] = QString::fromStdString(jt->second.string_value());
-
-                if (auto jd = data.find("jobDescription"); jd != data.end() && jd->second.is_string())
-                    jobDetails["jobDescription"] = QString::fromStdString(jd->second.string_value());
-
-                if (auto pay = data.find("pay"); pay != data.end()) {
-                    if (pay->second.is_integer())
-                        jobDetails["payment"] = static_cast<qint64>(pay->second.integer_value());
-                    else if (pay->second.is_double())
-                        jobDetails["payment"] = pay->second.double_value();
-                }
-
-                if (auto uid = data.find("uid"); uid != data.end() && uid->second.is_string())
-                    jobDetails["employerId"] = QString::fromStdString(uid->second.string_value());
-
-                if (auto desc = propMap.find("description"); desc != propMap.end() && desc->second.is_string())
-                    jobDetails["proposalDescription"] = QString::fromStdString(desc->second.string_value());
-
-                if (auto bud = propMap.find("budgetRequest"); bud != propMap.end()) {
-                    if (bud->second.is_string())
-                        jobDetails["budgetRequest"] = QString::fromStdString(bud->second.string_value());
-                    else if (bud->second.is_integer())
-                        jobDetails["budgetRequest"] = static_cast<qint64>(bud->second.integer_value());
-                    else if (bud->second.is_double())
-                        jobDetails["budgetRequest"] = bud->second.double_value();
-                }
-
-                QString status = "pending";
-                if (auto st = propMap.find("status"); st != propMap.end() && st->second.is_string())
-                    status = QString::fromStdString(st->second.string_value());
-                jobDetails["status"] = status;
-
-                if (status == "accepted") break;
-
-                if (auto af = data.find("approvedFreelancer"); af != data.end() && af->second.is_string())
-                    jobDetails["approvedFreelancer"] = QString::fromStdString(af->second.string_value());
-
-                appliedJobs.append(jobDetails);
-                break;  // Done with this job
-            }
-        }
-
-        response["status"] = "success";
-        response["appliedJobs"] = appliedJobs;
-
-        sendResponse(clientSocket, QJsonDocument(response).toJson(QJsonDocument::Compact).toStdString()); });
+    if (fut.error() != firebase::firestore::kErrorOk) {
+        response["status"] = "error";
+        response["error"] = QString::fromStdString(fut.error_message());
+        sendResponse(clientSocket, QJsonDocument(response).toJson(QJsonDocument::Compact).toStdString());
+        return;
     }
 
-    else if (requestType == "getApprovedJobs")
-    {
-        QString freelancerId = jsonRequest["freelancerId"].toString();
-        QJsonObject response;
+    const auto *snapshot = fut.result();
+    for (const auto &doc : snapshot->documents()) {
+        QString jobId = QString::fromStdString(doc.id());
+        auto data = doc.GetData();
 
-        if (freelancerId.isEmpty())
-        {
-            QJsonObject err;
-            err["status"] = "error";
-            err["error"] = "getApprovedJobs requires a freelancerId";
-            sendResponse(clientSocket, QJsonDocument(err).toJson(QJsonDocument::Compact).toStdString());
-            return;
-        }
+        auto propIt = data.find("proposals");
+        if (propIt == data.end() || !propIt->second.is_array()) continue;
 
-        auto jobsQuery = firestore->Collection("jobs").Get();
+        for (const auto &pv : propIt->second.array_value()) {
+            if (!pv.is_map()) continue;
+            const auto &propMap = pv.map_value();
 
-        qDebug() << "getApprovedJobs 1" << Qt::endl;
+            auto fidIt = propMap.find("freelancerId");
+            if (fidIt == propMap.end() || !fidIt->second.is_string()) continue;
 
-        jobsQuery.OnCompletion([this, clientSocket, freelancerId](const firebase::Future<firebase::firestore::QuerySnapshot> &future)
-                        {
-        QJsonObject response;
-        QJsonArray approvedJobsArray;
-        
-        if (future.error() != firebase::firestore::kErrorOk) {
-            response["status"] = "error";
-            response["error"] = QString::fromStdString(future.error_message());
-            sendResponse(clientSocket, QJsonDocument(response).toJson(QJsonDocument::Compact).toStdString());
-            return;
-        }
-        
-        const firebase::firestore::QuerySnapshot* snapshot = future.result();
-        
-        // Loop through all jobs
-        qDebug() << "getApprovedJobs 2" << Qt::endl;
-        for (const auto& doc : snapshot->documents()) {
-            QString jobId = QString::fromStdString(doc.id());
-            auto data = doc.GetData();
-            
-            auto approvedFreelancer = data.find("approvedFreelancer");
+            if (fidIt->second.string_value() != freelancerId.toStdString()) continue;
 
-            if (approvedFreelancer != data.end() && 
-                approvedFreelancer->second.is_string() && 
-                approvedFreelancer->second.string_value() == freelancerId.toStdString())
-            {
-                QJsonObject jobDetails; // New object for each job
+            QJsonObject jobDetails;
+            jobDetails["jobId"] = jobId;
 
-                jobDetails["jobId"] = jobId;
-                
-                // Get job details
-                if (data.find("JobTitle") != data.end() && data["JobTitle"].is_string()) {
-                    jobDetails["jobTitle"] = QString::fromStdString(data["JobTitle"].string_value());
+            if (auto jt = data.find("JobTitle"); jt != data.end() && jt->second.is_string())
+                jobDetails["jobTitle"] = QString::fromStdString(jt->second.string_value());
+
+            if (auto jd = data.find("jobDescription"); jd != data.end() && jd->second.is_string())
+                jobDetails["jobDescription"] = QString::fromStdString(jd->second.string_value());
+
+            // Get requiredSkills array instead of pay
+            if (auto skills = data.find("requiredSkills"); skills != data.end() && skills->second.is_array()) {
+                QJsonArray skillsArray;
+                for (const auto& skill : skills->second.array_value()) {
+                    if (skill.is_string()) {
+                        skillsArray.append(QString::fromStdString(skill.string_value()));
+                    }
                 }
-                
-                if (data.find("jobDescription") != data.end() && data["jobDescription"].is_string()) {
-                    jobDetails["jobDescription"] = QString::fromStdString(data["jobDescription"].string_value());
-                }
-                
-                if (data.find("pay") != data.end() && data["pay"].is_string()) {
-                    jobDetails["payment"] = QString::fromStdString(data["pay"].string_value());
-                }
-                
-                if (data.find("uid") != data.end() && data["uid"].is_string()) {
-                    jobDetails["employerId"] = QString::fromStdString(data["uid"].string_value());
-                }
-                
-                approvedJobsArray.append(jobDetails);
+                jobDetails["requiredSkills"] = skillsArray;
+            } else {
+                jobDetails["requiredSkills"] = QJsonArray(); // Empty array if no skills
             }
+
+            if (auto uid = data.find("uid"); uid != data.end() && uid->second.is_string())
+                jobDetails["employerId"] = QString::fromStdString(uid->second.string_value());
+
+            if (auto desc = propMap.find("description"); desc != propMap.end() && desc->second.is_string())
+                jobDetails["proposalDescription"] = QString::fromStdString(desc->second.string_value());
+
+            // Get budgetRequest from the proposal instead of job payment
+            if (auto bud = propMap.find("budgetRequest"); bud != propMap.end()) {
+                if (bud->second.is_string())
+                    jobDetails["budgetRequest"] = QString::fromStdString(bud->second.string_value());
+                else if (bud->second.is_integer())
+                    jobDetails["budgetRequest"] = static_cast<qint64>(bud->second.integer_value());
+                else if (bud->second.is_double())
+                    jobDetails["budgetRequest"] = bud->second.double_value();
+            } else {
+                jobDetails["budgetRequest"] = "Not specified";
+            }
+
+            QString status = "pending";
+            if (auto st = propMap.find("status"); st != propMap.end() && st->second.is_string())
+                status = QString::fromStdString(st->second.string_value());
+            jobDetails["status"] = status;
+
+            if (auto af = data.find("approvedFreelancer"); af != data.end() && af->second.is_string())
+                jobDetails["approvedFreelancer"] = QString::fromStdString(af->second.string_value());
+
+            appliedJobs.append(jobDetails);
+            break;  // Done with this job
         }
+    }
+
+    response["status"] = "success";
+    response["appliedJobs"] = appliedJobs;
+
+    sendResponse(clientSocket, QJsonDocument(response).toJson(QJsonDocument::Compact).toStdString()); });
+    }
+    else if (requestType == "getApprovedJobs")
+{
+    QString freelancerId = jsonRequest["freelancerId"].toString();
+    QJsonObject response;
+
+    if (freelancerId.isEmpty())
+    {
+        QJsonObject err;
+        err["status"] = "error";
+        err["error"] = "getApprovedJobs requires a freelancerId";
+        sendResponse(clientSocket, QJsonDocument(err).toJson(QJsonDocument::Compact).toStdString());
+        return;
+    }
+
+    auto jobsQuery = firestore->Collection("jobs").Get();
+
+    qDebug() << "getApprovedJobs 1" << Qt::endl;
+
+    jobsQuery.OnCompletion([this, clientSocket, freelancerId](const firebase::Future<firebase::firestore::QuerySnapshot> &future)
+                    {
+    QJsonObject response;
+    QJsonArray approvedJobsArray;
+    
+    if (future.error() != firebase::firestore::kErrorOk) {
+        response["status"] = "error";
+        response["error"] = QString::fromStdString(future.error_message());
+        sendResponse(clientSocket, QJsonDocument(response).toJson(QJsonDocument::Compact).toStdString());
+        return;
+    }
+    
+    const firebase::firestore::QuerySnapshot* snapshot = future.result();
+    
+    // Loop through all jobs
+    qDebug() << "getApprovedJobs 2" << Qt::endl;
+    for (const auto& doc : snapshot->documents()) {
+        QString jobId = QString::fromStdString(doc.id());
+        auto data = doc.GetData();
         
-        response["status"] = "success";
-        response["approvedJobs"] = approvedJobsArray;
-        
-        qDebug() << "getApprovedJobs" << approvedJobsArray;
-        // Set the final response object and send it - just ONCE
-        QJsonDocument doc(response);
-        sendResponse(clientSocket, doc.toJson(QJsonDocument::Compact).toStdString());});
+        auto approvedFreelancer = data.find("approvedFreelancer");
+
+        if (approvedFreelancer != data.end() && 
+            approvedFreelancer->second.is_string() && 
+            approvedFreelancer->second.string_value() == freelancerId.toStdString())
+        {
+            QJsonObject jobDetails; // New object for each job
+
+            jobDetails["jobId"] = jobId;
+            
+            // Get job details
+            if (data.find("JobTitle") != data.end() && data["JobTitle"].is_string()) {
+                jobDetails["jobTitle"] = QString::fromStdString(data["JobTitle"].string_value());
+            }
+            
+            if (data.find("jobDescription") != data.end() && data["jobDescription"].is_string()) {
+                jobDetails["jobDescription"] = QString::fromStdString(data["jobDescription"].string_value());
+            }
+            
+            // Get requiredSkills array instead of pay
+            if (data.find("requiredSkills") != data.end() && data["requiredSkills"].is_array()) {
+                QJsonArray skillsArray;
+                for (const auto& skill : data["requiredSkills"].array_value()) {
+                    if (skill.is_string()) {
+                        skillsArray.append(QString::fromStdString(skill.string_value()));
+                    }
+                }
+                jobDetails["requiredSkills"] = skillsArray;
+            } else {
+                jobDetails["requiredSkills"] = QJsonArray(); // Empty array if no skills
+            }
+            
+            if (data.find("uid") != data.end() && data["uid"].is_string()) {
+                jobDetails["employerId"] = QString::fromStdString(data["uid"].string_value());
+            }
+            
+            // Find the budget request from this freelancer's proposal
+            if (data.find("proposals") != data.end() && data["proposals"].is_array()) {
+                for (const auto& proposal : data["proposals"].array_value()) {
+                    if (proposal.is_map()) {
+                        const auto& propMap = proposal.map_value();
+                        auto fidIt = propMap.find("freelancerId");
+                        
+                        if (fidIt != propMap.end() && 
+                            fidIt->second.is_string() && 
+                            fidIt->second.string_value() == freelancerId.toStdString()) {
+                            
+                            // Found this freelancer's proposal, get the budget request
+                            auto budgetIt = propMap.find("budgetRequest");
+                            if (budgetIt != propMap.end()) {
+                                if (budgetIt->second.is_string()) {
+                                    jobDetails["budgetRequest"] = QString::fromStdString(budgetIt->second.string_value());
+                                } else if (budgetIt->second.is_integer()) {
+                                    jobDetails["budgetRequest"] = static_cast<qint64>(budgetIt->second.integer_value());
+                                } else if (budgetIt->second.is_double()) {
+                                    jobDetails["budgetRequest"] = budgetIt->second.double_value();
+                                }
+                            } else {
+                                jobDetails["budgetRequest"] = "Not specified";
+                            }
+                            break; // Found the proposal, no need to continue
+                        }
+                    }
+                }
+            } else {
+                jobDetails["budgetRequest"] = "Not specified";
+            }
+            
+            approvedJobsArray.append(jobDetails);
+        }
+    }
+    
+    response["status"] = "success";
+    response["approvedJobs"] = approvedJobsArray;
+    
+    qDebug() << "getApprovedJobs" << approvedJobsArray;
+    // Set the final response object and send it - just ONCE
+    QJsonDocument doc(response);
+    sendResponse(clientSocket, doc.toJson(QJsonDocument::Compact).toStdString());});
     }
     else if (requestType == "getProposals")
     {
