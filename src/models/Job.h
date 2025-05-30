@@ -44,6 +44,8 @@ public:
         expiryDate(expiryDate), requiredSkills(requiredSkills),
         payment(payment), acceptedFreelancerUid(_acceptedFreelancerUid) {}
 
+  Job() = default;
+
   ~Job() = default;
 
   // getters

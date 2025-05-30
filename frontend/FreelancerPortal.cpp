@@ -1,511 +1,725 @@
-// Home page for the freelancer
 #include "FreelancerPortal.h"
+#include "UserManager.h"
+#include "FreelancerProfileEdit.h"
 #include "client.h"
-// #include "../src/models/User.h"
 #include <QVBoxLayout>
 #include <QHBoxLayout>
+#include <QTabWidget>
 #include <QLabel>
 #include <QPushButton>
-#include <QListWidget>
-#include <QLineEdit>
-#include <QComboBox>
-#include <QScrollArea>
 #include <QGroupBox>
-#include <QTabWidget>
+#include <QListWidget>
+#include <QTextEdit>
+#include <QScrollArea>
 #include <QMessageBox>
-#include "FreelancerProfileEdit.h"
-#include "UserManager.h"
-#include "JobFeed.h"
-#include "Proposal.h"
 #include <QTimer>
+#include <QSplitter>
+#include <QFrame>
+#include <QFormLayout>
+#include <QJsonObject>
+#include <QJsonArray>
 
-FreelancerPortal::FreelancerPortal(QWidget *parent) : QWidget(parent), currentUser(nullptr)
+QDateTime JobFeed::lastRequestTime = QDateTime();
+
+
+FreelancerPortal::FreelancerPortal(QWidget *parent)
+    : QWidget(parent),
+      currentSelectedJob(),
+      hasSelectedJob(false),
+      currentSelectedAppliedJob(),
+      hasSelectedAppliedJob(false),
+      currentSelectedApprovedJob(),
+      hasSelectedApprovedJob(false)
+{
+    qDebug() << "FreelancerPortal constructor called - instance:" << this;
+    if (uiSetup) {
+        qDebug() << "setupUI already called, skipping";
+        return;
+    }
+    uiSetup = true;
+    setupUI();
+    loadUserData();
+    
+    // Load data for current jobs tab
+    QTimer::singleShot(500, this, &FreelancerPortal::loadAppliedJobs);
+    QTimer::singleShot(1000, this, &FreelancerPortal::loadApprovedJobs);
+}
+
+void FreelancerPortal::setupUI()
 {
     QVBoxLayout *mainLayout = new QVBoxLayout(this);
-    mainLayout->addWidget(renderFreelancerPortal());
-    setLayout(mainLayout);
-    currentUser = UserManager::getInstance()->getCurrentUser();
-    if (currentUser)
-    {
-        updateProfileInfo();
-    }
-}
-
-void FreelancerPortal::setCurrentUser(User *user)
-{
-    currentUser = user;
-    // Also update the UserManager
-    UserManager::getInstance()->setCurrentUser(user);
-    updateProfileInfo();
-}
-
-void FreelancerPortal::updateProfileInfo()
-{
-    if (!currentUser)
-        return;
-
-    Freelancer *currentUser = UserManager::getInstance()->getCurrentFreelancer();
-
-    nameLabel->setText(QString::fromStdString(currentUser->getName()));
-    descriptionTextEdit->setPlainText(QString::fromStdString(currentUser->getDescription()));
-
-    // Update tags/skills
-    skillsListWidget->clear();
-    for (const auto &skill : currentUser->getSkills())
-    {
-        skillsListWidget->addItem(QString::fromStdString(skill));
-    }
-
-    // Update job history
-    jobHistoryList->clear();
-    for (const auto &job : currentUser->getJobHistory())
-    {
-        QString jobEntry = QString::fromStdString(job.jobTitle) + " (" +
-                           QString::fromStdString(job.startDate) + " - " +
-                           QString::fromStdString(job.endDate) + ")";
-        jobHistoryList->addItem(jobEntry);
-    }
-
-    // Update accomplishments
-    accomplishmentsList->clear();
-    for (const auto &accomplishment : currentUser->getAccomplishments())
-    {
-        accomplishmentsList->addItem(QString::fromStdString(accomplishment));
-    }
-}
-
-QWidget *FreelancerPortal::renderFreelancerPortal()
-{
-    QTabWidget *tabWidget = new QTabWidget();
-
-    // Jobs Tab
-    QWidget *jobsTab = createJobsTab();
-    tabWidget->addTab(jobsTab, "Available Jobs");
-
-    // Profile Tab
-    QWidget *profileTab = createProfileTab();
-    tabWidget->addTab(profileTab, "My Profile");
-
-    // Messages Tab
-    QWidget *messagesTab = createMessagesTab();
-    tabWidget->addTab(messagesTab, "Current Jobs");
-
-    // Main Layout
-    QVBoxLayout *mainLayout = new QVBoxLayout();
-
-    // Header with welcome and logout
-    QHBoxLayout *headerLayout = new QHBoxLayout();
-    QLabel *welcomeLabel = new QLabel("Welcome, Freelancer!");
-    QFont welcomeFont;
-    welcomeFont.setPointSize(16);
-    welcomeFont.setBold(true);
-    welcomeLabel->setFont(welcomeFont);
-
-    QPushButton *logoutBtn = new QPushButton("Logout");
-    logoutBtn->setStyleSheet("padding: 8px; font-size: 13px; color: #fff; background: #d9534f;");
-    connect(logoutBtn, &QPushButton::clicked, [this]()
-            {
-        BackendClient* client = BackendClient::getInstance();
-        // Logout from server
-        client->signOut([this](bool success) {
-            if (success) {
-                // Clear the current user in the UserManager
-                UserManager::getInstance()->clearCurrentUser();
-                currentUser = nullptr;
-                emit returnToHomeRequested();
-            } else {
-                QMessageBox::warning(this, "Logout Error", 
-                                     "Failed to log out. Please try again.");
-            }
-        }); });
-
-    headerLayout->addWidget(welcomeLabel, 1);
-    headerLayout->addWidget(logoutBtn, 0, Qt::AlignRight);
-
-    mainLayout->addLayout(headerLayout);
+    
+    // Setup navigation bar first
+    setupNavigationBar();
+    mainLayout->addWidget(navigationBar);
+    
+    // Create tab widget
+    tabWidget = new QTabWidget();
+    tabWidget->setStyleSheet(
+        "QTabWidget::pane { border: 1px solid #c0c0c0; }"
+        "QTabBar::tab { background: #f0f0f0; padding: 10px; margin-right: 2px; }"
+        "QTabBar::tab:selected { background: #ffffff; border-bottom: 2px solid #007bff; }"
+    );
+    
+    // Create the three tabs
+    setupAvailableJobsTab();
+    setupCurrentJobsTab();
+    setupProfileTab();
+    
     mainLayout->addWidget(tabWidget);
-
-    QWidget *container = new QWidget();
-    container->setLayout(mainLayout);
-    return container;
 }
 
-QWidget *FreelancerPortal::createJobsTab()
+void FreelancerPortal::setupNavigationBar()
 {
-    JobFeed *jobFeed = new JobFeed(this, true);
-    return jobFeed;
+    navigationBar = new QWidget();
+    navigationBar->setStyleSheet(
+        "QWidget { background-color: #2c3e50; padding: 10px; }"
+        "QLabel { color: white; font-weight: bold; font-size: 16px; }"
+        "QPushButton { background-color: #e74c3c; color: white; padding: 8px 16px; "
+        "border-radius: 4px; font-weight: bold; }"
+        "QPushButton:hover { background-color: #c0392b; }"
+    );
+    
+    QHBoxLayout *navLayout = new QHBoxLayout(navigationBar);
+    
+    // Welcome message
+    welcomeLabel = new QLabel();
+    UserManager *userManager = UserManager::getInstance();
+    Freelancer *freelancer = userManager->getCurrentFreelancer();
+    if (freelancer) {
+        welcomeLabel->setText(QString("Welcome, %1 - Freelancer Portal")
+                              .arg(QString::fromStdString(freelancer->getName())));
+    } else {
+        welcomeLabel->setText("Freelancer Portal");
+    }
+    
+    // Logout button
+    logoutButton = new QPushButton("Logout");
+    connect(logoutButton, &QPushButton::clicked, this, &FreelancerPortal::onLogoutClicked);
+    
+    navLayout->addWidget(welcomeLabel);
+    navLayout->addStretch();
+    navLayout->addWidget(logoutButton);
 }
 
-QWidget *FreelancerPortal::createProfileTab()
+FreelancerPortal::~FreelancerPortal()
+{
+    if (availableJobsFeed) {
+        availableJobsFeed->isDestroying = true;
+    }
+}
+
+void FreelancerPortal::setupAvailableJobsTab()
+{
+    qDebug() << "setupAvailableJobsTab() called";
+    
+    // Only create if not already created
+    if (availableJobsFeed) {
+        qDebug() << "JobFeed already exists, reusing";
+        return;
+    }
+    
+    QWidget *availableJobsWidget = new QWidget();
+    QVBoxLayout *layout = new QVBoxLayout(availableJobsWidget);
+    
+    // Add title
+    QLabel *titleLabel = new QLabel("Available Jobs");
+    titleLabel->setStyleSheet("font-size: 24px; font-weight: bold; color: #2c3e50; margin-bottom: 10px;");
+    layout->addWidget(titleLabel);
+    
+    // Create JobFeed only once
+    availableJobsFeed = new JobFeed(availableJobsWidget, true);
+    layout->addWidget(availableJobsFeed);
+    
+    tabWidget->addTab(availableJobsWidget, "Available Jobs");
+}
+
+void FreelancerPortal::setupCurrentJobsTab()
+{
+    QWidget *currentJobsWidget = new QWidget();
+    QVBoxLayout *mainLayout = new QVBoxLayout(currentJobsWidget);
+    
+    // Title
+    QLabel *titleLabel = new QLabel("Current Jobs");
+    titleLabel->setStyleSheet("font-size: 24px; font-weight: bold; color: #2c3e50; margin-bottom: 10px;");
+    mainLayout->addWidget(titleLabel);
+    
+    // Create main splitter for the layout
+    QSplitter *mainSplitter = new QSplitter(Qt::Horizontal);
+    
+    // Left side: Jobs lists
+    QWidget *leftPanel = new QWidget();
+    QVBoxLayout *leftLayout = new QVBoxLayout(leftPanel);
+    
+    // Applied Jobs section
+    QGroupBox *appliedJobsGroup = new QGroupBox("Applied Jobs (Pending)");
+    appliedJobsGroup->setStyleSheet("QGroupBox { font-weight: bold; font-size: 14px; }");
+    QVBoxLayout *appliedLayout = new QVBoxLayout();
+    
+    appliedJobsList = new QListWidget();
+    appliedJobsList->setStyleSheet(
+        "QListWidget::item { padding: 8px; border-bottom: 1px solid #e0e0e0; }"
+        "QListWidget::item:selected { background-color: #e3f2fd; }"
+        "QListWidget::item:hover { background-color: #f5f5f5; }"
+    );
+    appliedLayout->addWidget(appliedJobsList);
+    appliedJobsGroup->setLayout(appliedLayout);
+    
+    // Approved Jobs section
+    QGroupBox *approvedJobsGroup = new QGroupBox("Approved Jobs (In Progress)");
+    approvedJobsGroup->setStyleSheet("QGroupBox { font-weight: bold; font-size: 14px; }");
+    QVBoxLayout *approvedLayout = new QVBoxLayout();
+    
+    approvedJobsList = new QListWidget();
+    approvedJobsList->setStyleSheet(
+        "QListWidget::item { padding: 8px; border-bottom: 1px solid #e0e0e0; }"
+        "QListWidget::item:selected { background-color: #e8f5e8; }"
+        "QListWidget::item:hover { background-color: #f5f5f5; }"
+    );
+    approvedLayout->addWidget(approvedJobsList);
+    approvedJobsGroup->setLayout(approvedLayout);
+    
+    leftLayout->addWidget(appliedJobsGroup);
+    leftLayout->addWidget(approvedJobsGroup);
+    
+    // Right side: Details panels
+    QWidget *rightPanel = new QWidget();
+    QVBoxLayout *rightLayout = new QVBoxLayout(rightPanel);
+    
+    // Job Information section
+    jobInfoGroup = new QGroupBox("Job Information");
+    jobInfoGroup->setStyleSheet("QGroupBox { font-weight: bold; font-size: 14px; }");
+    setupJobInfoPanel();
+    
+    // Hiring Manager Information section
+    hiringManagerInfoGroup = new QGroupBox("Hiring Manager Information");
+    hiringManagerInfoGroup->setStyleSheet("QGroupBox { font-weight: bold; font-size: 14px; }");
+    setupHiringManagerInfoPanel();
+    
+    rightLayout->addWidget(jobInfoGroup);
+    rightLayout->addWidget(hiringManagerInfoGroup);
+    
+    // Add panels to splitter
+    mainSplitter->addWidget(leftPanel);
+    mainSplitter->addWidget(rightPanel);
+    mainSplitter->setSizes({300, 500});
+    
+    mainLayout->addWidget(mainSplitter);
+    
+    // Connect signals
+    connect(appliedJobsList, &QListWidget::currentItemChanged, 
+            this, &FreelancerPortal::onAppliedJobSelected);
+    connect(approvedJobsList, &QListWidget::currentItemChanged, 
+            this, &FreelancerPortal::onApprovedJobSelected);
+    
+    // Add refresh button
+    QPushButton *refreshButton = new QPushButton("Refresh Current Jobs");
+    refreshButton->setStyleSheet("background-color: #17a2b8; color: white; padding: 8px; border-radius: 4px;");
+    connect(refreshButton, &QPushButton::clicked, [this]() {
+        loadAppliedJobs();
+        loadApprovedJobs();
+    });
+    mainLayout->addWidget(refreshButton);
+    
+    tabWidget->addTab(currentJobsWidget, "Current Jobs");
+}
+
+void FreelancerPortal::setupJobInfoPanel()
+{
+    QVBoxLayout *layout = new QVBoxLayout(jobInfoGroup);
+    
+    // Create scroll area
+    QScrollArea *scrollArea = new QScrollArea();
+    scrollArea->setWidgetResizable(true);
+    scrollArea->setFrameShape(QFrame::NoFrame);
+    
+    QWidget *content = new QWidget();
+    QVBoxLayout *contentLayout = new QVBoxLayout(content);
+    
+    // Job details labels
+    jobInfoTitleLabel = new QLabel("Select a job to view details");
+    jobInfoTitleLabel->setStyleSheet("font-weight: bold; font-size: 16px; color: #2c3e50;");
+    jobInfoTitleLabel->setWordWrap(true);
+    
+    jobInfoEmployerLabel = new QLabel();
+    jobInfoEmployerLabel->setStyleSheet("color: #495057; font-size: 14px;");
+    
+    jobInfoPaymentLabel = new QLabel();
+    jobInfoPaymentLabel->setStyleSheet("color: #28a745; font-size: 14px; font-weight: bold;");
+    
+    jobInfoDateLabel = new QLabel();
+    jobInfoDateLabel->setStyleSheet("color: #6c757d; font-size: 12px;");
+    
+    jobInfoDescriptionLabel = new QLabel();
+    jobInfoDescriptionLabel->setWordWrap(true);
+    jobInfoDescriptionLabel->setStyleSheet(
+        "background-color: #f8f9fa; border-radius: 6px; padding: 10px; margin: 5px 0;"
+    );
+    
+    jobInfoSkillsLabel = new QLabel();
+    jobInfoSkillsLabel->setWordWrap(true);
+    jobInfoSkillsLabel->setStyleSheet(
+        "background-color: #e9ecef; border-radius: 6px; padding: 8px; margin: 5px 0;"
+    );
+    
+    contentLayout->addWidget(jobInfoTitleLabel);
+    contentLayout->addWidget(jobInfoEmployerLabel);
+    contentLayout->addWidget(jobInfoPaymentLabel);
+    contentLayout->addWidget(jobInfoDateLabel);
+    contentLayout->addWidget(new QLabel("Description:"));
+    contentLayout->addWidget(jobInfoDescriptionLabel);
+    contentLayout->addWidget(new QLabel("Required Skills:"));
+    contentLayout->addWidget(jobInfoSkillsLabel);
+    contentLayout->addStretch();
+    
+    scrollArea->setWidget(content);
+    layout->addWidget(scrollArea);
+}
+
+void FreelancerPortal::setupHiringManagerInfoPanel()
+{
+    QVBoxLayout *layout = new QVBoxLayout(hiringManagerInfoGroup);
+    
+    // Create scroll area
+    QScrollArea *scrollArea = new QScrollArea();
+    scrollArea->setWidgetResizable(true);
+    scrollArea->setFrameShape(QFrame::NoFrame);
+    
+    QWidget *content = new QWidget();
+    QVBoxLayout *contentLayout = new QVBoxLayout(content);
+    
+    // Hiring manager details
+    hmNameLabel = new QLabel("Select a job to view hiring manager details");
+    hmNameLabel->setStyleSheet("font-weight: bold; font-size: 16px; color: #2c3e50;");
+    
+    hmEmailLabel = new QLabel();
+    hmEmailLabel->setStyleSheet("color: #495057; font-size: 14px;");
+    
+    hmCompanyLabel = new QLabel();
+    hmCompanyLabel->setStyleSheet("color: #007bff; font-size: 14px; font-weight: bold;");
+    
+    hmDescriptionLabel = new QLabel();
+    hmDescriptionLabel->setWordWrap(true);
+    hmDescriptionLabel->setStyleSheet(
+        "background-color: #f8f9fa; border-radius: 6px; padding: 10px; margin: 5px 0;"
+    );
+    
+    hmCompanyDescLabel = new QLabel();
+    hmCompanyDescLabel->setWordWrap(true);
+    hmCompanyDescLabel->setStyleSheet(
+        "background-color: #e3f2fd; border-radius: 6px; padding: 10px; margin: 5px 0;"
+    );
+    
+    contentLayout->addWidget(hmNameLabel);
+    contentLayout->addWidget(hmEmailLabel);
+    contentLayout->addWidget(hmCompanyLabel);
+    contentLayout->addWidget(new QLabel("About:"));
+    contentLayout->addWidget(hmDescriptionLabel);
+    contentLayout->addWidget(new QLabel("Company Description:"));
+    contentLayout->addWidget(hmCompanyDescLabel);
+    contentLayout->addStretch();
+    
+    scrollArea->setWidget(content);
+    layout->addWidget(scrollArea);
+}
+
+void FreelancerPortal::setupProfileTab()
 {
     QWidget *profileWidget = new QWidget();
-    QVBoxLayout *profileLayout = new QVBoxLayout(profileWidget);
-
-    // User info section
-    QGroupBox *userInfoGroup = new QGroupBox("Personal Information");
-    QVBoxLayout *userInfoLayout = new QVBoxLayout();
-
-    // Profile header with name and rating
-    QHBoxLayout *profileHeaderLayout = new QHBoxLayout();
-    nameLabel = new QLabel("Your Name");
-    nameLabel->setStyleSheet("font-weight: bold; font-size: 18px;");
-
-    // Rating widget (simplified - would need a custom star rating widget in real app)
-    QHBoxLayout *ratingLayout = new QHBoxLayout();
-    QLabel *ratingLabel = new QLabel("Your Rating: ");
-    QLabel *ratingStars = new QLabel("★★★★☆ 4.0");
-    ratingStars->setStyleSheet("font-size: 16px; color: gold;");
-
-    ratingLayout->addWidget(ratingLabel);
-    ratingLayout->addWidget(ratingStars);
-    ratingLayout->addStretch();
-
-    profileHeaderLayout->addWidget(nameLabel);
-    profileHeaderLayout->addLayout(ratingLayout);
-
-    // Description
-    QLabel *descriptionLabel = new QLabel("About Me:");
-    descriptionTextEdit = new QTextEdit();
-    descriptionTextEdit->setReadOnly(true);
-    descriptionTextEdit->setMaximumHeight(100);
-
-    userInfoLayout->addLayout(profileHeaderLayout);
-    userInfoLayout->addWidget(descriptionLabel);
-    userInfoLayout->addWidget(descriptionTextEdit);
-    userInfoGroup->setLayout(userInfoLayout);
-
+    QVBoxLayout *layout = new QVBoxLayout(profileWidget);
+    
+    // Title
+    QLabel *titleLabel = new QLabel("My Profile");
+    titleLabel->setStyleSheet("font-size: 24px; font-weight: bold; color: #2c3e50; margin-bottom: 10px;");
+    layout->addWidget(titleLabel);
+    
+    // Create scroll area for profile content
+    QScrollArea *scrollArea = new QScrollArea();
+    scrollArea->setWidgetResizable(true);
+    scrollArea->setFrameShape(QFrame::NoFrame);
+    
+    QWidget *profileContent = new QWidget();
+    QVBoxLayout *profileLayout = new QVBoxLayout(profileContent);
+    
+    // Basic info section
+    QGroupBox *basicInfoGroup = new QGroupBox("Basic Information");
+    QFormLayout *basicInfoLayout = new QFormLayout();
+    
+    profileNameLabel = new QLabel();
+    profileEmailLabel = new QLabel();
+    profileHourlyRateLabel = new QLabel();
+    profileDescriptionLabel = new QLabel();
+    profileDescriptionLabel->setWordWrap(true);
+    profileDescriptionLabel->setStyleSheet("background-color: #f8f9fa; padding: 10px; border-radius: 6px;");
+    
+    basicInfoLayout->addRow("Name:", profileNameLabel);
+    basicInfoLayout->addRow("Email:", profileEmailLabel);
+    basicInfoLayout->addRow("Hourly Rate:", profileHourlyRateLabel);
+    basicInfoLayout->addRow("About Me:", profileDescriptionLabel);
+    
+    basicInfoGroup->setLayout(basicInfoLayout);
+    
     // Skills section
     QGroupBox *skillsGroup = new QGroupBox("Skills & Expertise");
     QVBoxLayout *skillsLayout = new QVBoxLayout();
-
-    skillsListWidget = new QListWidget();
-    skillsListWidget->setMaximumHeight(120);
-
-    skillsLayout->addWidget(skillsListWidget);
+    
+    profileSkillsLabel = new QLabel();
+    profileSkillsLabel->setWordWrap(true);
+    profileSkillsLabel->setStyleSheet("background-color: #e9ecef; padding: 10px; border-radius: 6px;");
+    skillsLayout->addWidget(profileSkillsLabel);
+    
     skillsGroup->setLayout(skillsLayout);
-
-    // Job history section
-    QGroupBox *historyGroup = new QGroupBox("Job History");
-    QVBoxLayout *historyLayout = new QVBoxLayout();
-
-    jobHistoryList = new QListWidget();
-
-    historyLayout->addWidget(jobHistoryList);
-    historyGroup->setLayout(historyLayout);
-
+    
+    // Education section
+    QGroupBox *educationGroup = new QGroupBox("Education");
+    QFormLayout *educationLayout = new QFormLayout();
+    
+    profileEducationLabel = new QLabel();
+    profileDegreeLabel = new QLabel();
+    
+    educationLayout->addRow("Institution:", profileEducationLabel);
+    educationLayout->addRow("Degree:", profileDegreeLabel);
+    
+    educationGroup->setLayout(educationLayout);
+    
     // Accomplishments section
     QGroupBox *accomplishmentsGroup = new QGroupBox("Accomplishments");
     QVBoxLayout *accomplishmentsLayout = new QVBoxLayout();
-
-    accomplishmentsList = new QListWidget();
-
-    accomplishmentsLayout->addWidget(accomplishmentsList);
+    
+    profileAccomplishmentsLabel = new QLabel();
+    profileAccomplishmentsLabel->setWordWrap(true);
+    profileAccomplishmentsLabel->setStyleSheet("background-color: #fff3cd; padding: 10px; border-radius: 6px;");
+    accomplishmentsLayout->addWidget(profileAccomplishmentsLabel);
+    
     accomplishmentsGroup->setLayout(accomplishmentsLayout);
-
+    
+    // Job History section
+    QGroupBox *jobHistoryGroup = new QGroupBox("Job History");
+    QVBoxLayout *jobHistoryLayout = new QVBoxLayout();
+    
+    profileJobHistoryList = new QListWidget();
+    profileJobHistoryList->setMaximumHeight(150);
+    profileJobHistoryList->setStyleSheet(
+        "QListWidget::item { padding: 8px; border-bottom: 1px solid #e0e0e0; }"
+    );
+    jobHistoryLayout->addWidget(profileJobHistoryList);
+    
+    jobHistoryGroup->setLayout(jobHistoryLayout);
+    
+    // Add all sections to profile layout
+    profileLayout->addWidget(basicInfoGroup);
+    profileLayout->addWidget(skillsGroup);
+    profileLayout->addWidget(educationGroup);
+    profileLayout->addWidget(accomplishmentsGroup);
+    profileLayout->addWidget(jobHistoryGroup);
+    profileLayout->addStretch();
+    
+    scrollArea->setWidget(profileContent);
+    layout->addWidget(scrollArea);
+    
     // Edit profile button
     QPushButton *editProfileBtn = new QPushButton("Edit Profile");
-    editProfileBtn->setStyleSheet("padding: 8px; background-color: #6c757d; color: white;");
-    connect(editProfileBtn, &QPushButton::clicked, [this]()
-            {
-    UserManager* userManager = UserManager::getInstance();
+    editProfileBtn->setStyleSheet(
+        "background-color: #007bff; color: white; padding: 12px 24px; "
+        "font-weight: bold; border-radius: 6px; font-size: 14px;"
+    );
+    connect(editProfileBtn, &QPushButton::clicked, this, &FreelancerPortal::editProfile);
+    layout->addWidget(editProfileBtn);
     
-    // Debug info
-    qDebug() << "Edit Profile clicked";
-    qDebug() << "UserManager says user is logged in:" << userManager->isUserLoggedIn();
-    
-    if (currentUser) {
-        qDebug() << "FreelancerPortal has currentUser:" << QString::fromStdString(currentUser->getName());
-        qDebug() << "currentUser is Freelancer:" << (dynamic_cast<Freelancer*>(currentUser) != nullptr);
-    } else {
-        qDebug() << "FreelancerPortal currentUser is null";
-    }
-    
-    if (!userManager->isUserLoggedIn()) {
-        QMessageBox::warning(this, "Not Logged In", "You need to be logged in to edit your profile.");
-        return;
-    }
-    
-    // Try using local currentUser if UserManager's user is not valid
-    Freelancer* freelancer = userManager->getCurrentFreelancer();
-    if (!freelancer && currentUser) {
-        freelancer = dynamic_cast<Freelancer*>(currentUser);
-        if (freelancer) {
-            // Fix the UserManager if it's out of sync
-            userManager->setCurrentUser(freelancer);
-        }
-    }
-    
-    if (!freelancer) {
-        QMessageBox::warning(this, "Invalid User Type", "Only freelancer accounts can edit this profile.");
-        return;
-    }
-    
-    FreelancerProfileEdit* dialog = new FreelancerProfileEdit(freelancer, this);
-    
-    connect(dialog, &FreelancerProfileEdit::profileUpdated, [this]() {
-        updateProfileInfo(); // Refresh the UI with updated info
-    });
-    
-    dialog->exec();
-    delete dialog; });
-    // Arrange everything in the profile tab
-    profileLayout->addWidget(userInfoGroup);
-    profileLayout->addWidget(skillsGroup);
-    profileLayout->addWidget(historyGroup);
-    profileLayout->addWidget(accomplishmentsGroup);
-    profileLayout->addWidget(editProfileBtn, 0, Qt::AlignRight);
-
-    return profileWidget;
+    tabWidget->addTab(profileWidget, "My Profile");
 }
 
-QWidget *FreelancerPortal::createMessagesTab()
+void FreelancerPortal::loadUserData()
 {
-    QWidget *messagesWidget = new QWidget();
-    QGridLayout *messagesLayout = new QGridLayout(messagesWidget);
+    UserManager *userManager = UserManager::getInstance();
+    Freelancer *freelancer = userManager->getCurrentFreelancer();
+    
+    if (!freelancer) {
+        QMessageBox::warning(this, "Error", "No freelancer user found. Please log in.");
+        return;
+    }
+    
+    // Update welcome label
+    if (welcomeLabel) {
+        welcomeLabel->setText(QString("Welcome, %1 - Freelancer Portal")
+                              .arg(QString::fromStdString(freelancer->getName())));
+    }
+    
+    // Populate profile tab
+    profileNameLabel->setText(QString::fromStdString(freelancer->getName()));
+    profileEmailLabel->setText(QString::fromStdString(freelancer->getEmail()));
+    profileHourlyRateLabel->setText(QString("$%1/hour").arg(freelancer->getHourlyRate(), 0, 'f', 2));
+    profileDescriptionLabel->setText(QString::fromStdString(freelancer->getDescription()));
+    
+    // Skills
+    QStringList skillsList;
+    for (const auto &skill : freelancer->getSkills()) {
+        skillsList << QString::fromStdString(skill);
+    }
+    profileSkillsLabel->setText(skillsList.isEmpty() ? "No skills added yet" : skillsList.join(" • "));
+    
+    // Education
+    User::education edu = freelancer->getEducation();
+    profileEducationLabel->setText(QString::fromStdString(edu.school));
+    profileDegreeLabel->setText(QString::fromStdString(edu.degreeLvl));
+    
+    // Accomplishments
+    QStringList accomplishmentsList;
+    for (const auto &acc : freelancer->getAccomplishments()) {
+        accomplishmentsList << QString::fromStdString(acc);
+    }
+    profileAccomplishmentsLabel->setText(accomplishmentsList.isEmpty() ? 
+        "No accomplishments added yet" : accomplishmentsList.join("\n• "));
+    
+    // Job History
+    profileJobHistoryList->clear();
+    for (const auto &job : freelancer->getJobHistory()) {
+        QString jobText = QString("%1 (%2 - %3)")
+                           .arg(QString::fromStdString(job.jobTitle))
+                           .arg(QString::fromStdString(job.startDate))
+                           .arg(QString::fromStdString(job.endDate));
+        profileJobHistoryList->addItem(jobText);
+    }
+    
+    if (freelancer->getJobHistory().empty()) {
+        profileJobHistoryList->addItem("No job history added yet");
+    }
+}
 
-    // 1. Top Left: Jobs Applied For
-    QGroupBox *appliedJobsGroup = new QGroupBox("Jobs Applied For");
-    appliedJobsGroup->setStyleSheet("QGroupBox { font-weight: bold; font-size: 14px; }");
-    QVBoxLayout *appliedJobsLayout = new QVBoxLayout();
+void FreelancerPortal::loadAppliedJobs()
+{
+    UserManager *userManager = UserManager::getInstance();
+    User *freelancer = userManager->getCurrentUser();
+    
+    if (!freelancer) {
+        return;
+    }
+    
+    QString freelancerId = QString::fromStdString(freelancer->getUid());
+    
+    appliedJobsList->clear();
+    appliedJobsList->addItem("Loading applied jobs...");
+    
+    BackendClient::getInstance()->getAppliedJobs(freelancerId, 
+        [this](bool success, const QJsonArray &jobs) {
+            appliedJobsList->clear();
+            
+            if (!success) {
+                appliedJobsList->addItem("Failed to load applied jobs");
+                return;
+            }
+            
+            if (jobs.isEmpty()) {
+                appliedJobsList->addItem("No applied jobs found");
+                return;
+            }
+            
+            for (const auto &jobValue : jobs) {
+                QJsonObject jobObj = jobValue.toObject();
+                QString jobTitle = jobObj["jobTitle"].toString();
+                QString employer = jobObj["employerName"].toString();
+                QString status = jobObj["status"].toString("pending");
+                
+                QString displayText = QString("%1\nEmployer: %2\nStatus: %3")
+                                       .arg(jobTitle)
+                                       .arg(employer)
+                                       .arg(status);
+                
+                QListWidgetItem *item = new QListWidgetItem(displayText);
+                item->setData(Qt::UserRole, jobValue);
+                appliedJobsList->addItem(item);
+            }
+        });
+}
 
-    appliedJobsList = new QListWidget();
-
-    // Add placeholder while loading
-    appliedJobsList->addItem("Loading applications...");
-
-    appliedJobsLayout->addWidget(appliedJobsList);
-    appliedJobsGroup->setLayout(appliedJobsLayout);
-
-    // 2. Top Right: Approved Jobs
-    QGroupBox *approvedJobsGroup = new QGroupBox("Approved Applications");
-    approvedJobsGroup->setStyleSheet("QGroupBox { font-weight: bold; font-size: 14px; }");
-    QVBoxLayout *approvedJobsLayout = new QVBoxLayout();
-
-    QListWidget *approvedJobsList = new QListWidget();
+void FreelancerPortal::loadApprovedJobs()
+{
+    UserManager *userManager = UserManager::getInstance();
+    User *freelancer = userManager->getCurrentUser();
+    
+    if (!freelancer) {
+        return;
+    }
+    
+    QString freelancerId = QString::fromStdString(freelancer->getUid());
+    
+    approvedJobsList->clear();
     approvedJobsList->addItem("Loading approved jobs...");
-    approvedJobsList->setStyleSheet("QListWidget::item { padding: 8px; color: #28a745; }");
-
-    approvedJobsLayout->addWidget(approvedJobsList);
-    approvedJobsGroup->setLayout(approvedJobsLayout);
-
-    // 3. Bottom Left: Job Information + Proposal
-    QGroupBox *jobInfoGroup = new QGroupBox("Job Information & Your Proposal");
-    jobInfoGroup->setStyleSheet("QGroupBox { font-weight: bold; font-size: 14px; }");
-    QVBoxLayout *jobInfoLayout = new QVBoxLayout();
-
-    // Job title and details
-    QLabel *jobTitleLabel = new QLabel("Job Title: Not Selected");
-    jobTitleLabel->setStyleSheet("font-weight: bold; font-size: 16px; color: #2c3e50;");
-
-    QLabel *jobDescLabel = new QLabel("Job Description:");
-    jobDescLabel->setStyleSheet("font-weight: bold; margin-top: 10px;");
-
-    QTextEdit *jobDescText = new QTextEdit();
-    jobDescText->setReadOnly(true);
-    jobDescText->setMaximumHeight(100);
-    jobDescText->setStyleSheet("background-color: #f8f9fa; border-radius: 4px;");
-
-    QLabel *paymentLabel = new QLabel("Payment Offer: Not Selected");
-    paymentLabel->setStyleSheet("font-weight: bold; color: #28a745;");
-
-    // Proposal section
-    QLabel *yourProposalLabel = new QLabel("Your Proposal:");
-    yourProposalLabel->setStyleSheet("font-weight: bold; margin-top: 10px;");
-
-    QTextEdit *proposalText = new QTextEdit();
-    proposalText->setReadOnly(true);
-    proposalText->setStyleSheet("background-color: #f8f9fa; border-radius: 4px;");
-
-    QLabel *requestedAmountLabel = new QLabel("Your Requested Payment: Not Available");
-    requestedAmountLabel->setStyleSheet("font-weight: bold; color: #17a2b8;");
-
-    QLabel *statusLabel = new QLabel("Status: Pending");
-    statusLabel->setStyleSheet("font-weight: bold; color: #ffc107; margin-top: 10px;");
-
-    jobInfoLayout->addWidget(jobTitleLabel);
-    jobInfoLayout->addWidget(jobDescLabel);
-    jobInfoLayout->addWidget(jobDescText);
-    jobInfoLayout->addWidget(paymentLabel);
-    jobInfoLayout->addWidget(yourProposalLabel);
-    jobInfoLayout->addWidget(proposalText);
-    jobInfoLayout->addWidget(requestedAmountLabel);
-    jobInfoLayout->addWidget(statusLabel);
-
-    jobInfoGroup->setLayout(jobInfoLayout);
-
-    // 4. Bottom Right: Employer Details
-    QGroupBox *employerGroup = new QGroupBox("Employer Details");
-    employerGroup->setStyleSheet("QGroupBox { font-weight: bold; font-size: 14px; }");
-    QVBoxLayout *employerLayout = new QVBoxLayout();
-
-    QLabel *employerNameLabel = new QLabel("Company: Not Selected");
-    employerNameLabel->setStyleSheet("font-weight: bold; font-size: 15px;");
-
-    QLabel *contactLabel = new QLabel("Contact:");
-    contactLabel->setStyleSheet("font-weight: bold; margin-top: 10px;");
-
-    QLabel *emailLabel = new QLabel("Email: Not Available");
-
-    QLabel *companyInfoLabel = new QLabel("Company Profile:");
-    companyInfoLabel->setStyleSheet("font-weight: bold; margin-top: 10px;");
-
-    QTextEdit *companyInfoText = new QTextEdit();
-    companyInfoText->setReadOnly(true);
-    companyInfoText->setMaximumHeight(150);
-    companyInfoText->setStyleSheet("background-color: #f8f9fa; border-radius: 4px;");
-
-    QLabel *ratingLabel = new QLabel("Employer Rating: ★★★★☆ (4.2)");
-    ratingLabel->setStyleSheet("color: #f39c12; margin-top: 10px;");
-
-    // Message employer button
-    QPushButton *messageBtn = new QPushButton("Message Employer");
-    messageBtn->setStyleSheet("background-color: #007bff; color: white; padding: 8px; border-radius: 4px;");
-
-    employerLayout->addWidget(employerNameLabel);
-    employerLayout->addWidget(contactLabel);
-    employerLayout->addWidget(emailLabel);
-    employerLayout->addWidget(companyInfoLabel);
-    employerLayout->addWidget(companyInfoText);
-    employerLayout->addWidget(ratingLabel);
-    employerLayout->addWidget(messageBtn);
-    employerLayout->addStretch();
-
-    employerGroup->setLayout(employerLayout);
-
-    // Add all widgets to the grid layout
-    messagesLayout->addWidget(appliedJobsGroup, 0, 0);
-    messagesLayout->addWidget(approvedJobsGroup, 0, 1);
-    messagesLayout->addWidget(jobInfoGroup, 1, 0);
-    messagesLayout->addWidget(employerGroup, 1, 1);
-
-    // Set column and row stretching
-    messagesLayout->setColumnStretch(0, 1);
-    messagesLayout->setColumnStretch(1, 1);
-    messagesLayout->setRowStretch(0, 1);
-    messagesLayout->setRowStretch(1, 2); // Give more space to bottom row
-    messagesLayout->setRowStretch(0, 1);
-    messagesLayout->setRowStretch(1, 2); // Give more space to bottom row
-
-    // Load data AFTER UI is completely set up - this prevents segfault
-    QTimer::singleShot(100, this, [this, approvedJobsList, jobTitleLabel, jobDescText, paymentLabel, proposalText, requestedAmountLabel, statusLabel, employerNameLabel, emailLabel, companyInfoText]()
-                       {
-        try {
-            BackendClient *client = BackendClient::getInstance();
-            if (!client) {
-                qDebug() << "Error: BackendClient instance is null in timer lambda.";
-                if (appliedJobsList) appliedJobsList->addItem("Error: Cannot connect to backend.");
+    
+    BackendClient::getInstance()->getApprovedJobs(freelancerId, 
+        [this](bool success, const QJsonArray &jobs) {
+            approvedJobsList->clear();
+            
+            if (!success) {
+                approvedJobsList->addItem("Failed to load approved jobs");
                 return;
             }
             
-            User* userToQuery = UserManager::getInstance()->getCurrentUser();
-
-            std::string userIdStr;
-            try {
-                qDebug() << "FreelancerPortal::createMessagesTab timer: Attempting to get UID for user:" << userToQuery;
-                userIdStr = userToQuery->getUid(); 
-                if (userIdStr.empty()) {
-                    qDebug() << "Error: User UID is empty after retrieval in timer lambda for user:" << userToQuery;
-                    if (appliedJobsList) {
-                        appliedJobsList->clear();
-                        appliedJobsList->addItem("Invalid user data (empty UID). Please log in again.");
-                    }
-                    return;
-                }
-            } catch (const std::exception& e) {
-                qDebug() << "Exception when getting user UID in timer lambda for user:" << userToQuery << "Error:" << e.what();
-                if (appliedJobsList) {
-                    appliedJobsList->clear();
-                    appliedJobsList->addItem("Error accessing user data. Please log in again.");
-                }
-                return;
-            } catch (...) {
-                qDebug() << "Unknown exception when getting user UID in timer lambda for user:" << userToQuery;
-                if (appliedJobsList) {
-                    appliedJobsList->clear();
-                    appliedJobsList->addItem("Unknown error accessing user data. Please log in again.");
-                }
+            if (jobs.isEmpty()) {
+                approvedJobsList->addItem("No approved jobs found");
                 return;
             }
-            QString freelancerId = QString::fromStdString(userIdStr);
+            
+            for (const auto &jobValue : jobs) {
+                QJsonObject jobObj = jobValue.toObject();
+                QString jobTitle = jobObj["jobTitle"].toString();
+                QString employer = jobObj["employerName"].toString();
+                QString payment = jobObj["payment"].toString();
+                
+                QString displayText = QString("%1\nEmployer: %2\nPayment: %3")
+                                       .arg(jobTitle)
+                                       .arg(employer)
+                                       .arg(payment);
+                
+                QListWidgetItem *item = new QListWidgetItem(displayText);
+                item->setData(Qt::UserRole, jobValue);
+                approvedJobsList->addItem(item);
+            }
+        });
+}
+
+void FreelancerPortal::onAppliedJobSelected(QListWidgetItem *current, QListWidgetItem *previous)
+{
+    Q_UNUSED(previous)
+    
+    if (!current || current->data(Qt::UserRole).isNull()) {
+        clearJobDetails();
+        return;
+    }
+    
+    QJsonObject jobObj = current->data(Qt::UserRole).toJsonObject();
+    updateJobDetails(jobObj);
+    loadHiringManagerInfo(jobObj["employerUid"].toString());
+}
+
+void FreelancerPortal::onApprovedJobSelected(QListWidgetItem *current, QListWidgetItem *previous)
+{
+    Q_UNUSED(previous)
+    
+    if (!current || current->data(Qt::UserRole).isNull()) {
+        clearJobDetails();
+        return;
+    }
+    
+    QJsonObject jobObj = current->data(Qt::UserRole).toJsonObject();
+    updateJobDetails(jobObj);
+    loadHiringManagerInfo(jobObj["employerUid"].toString());
+}
+
+void FreelancerPortal::updateJobDetails(const QJsonObject &jobObj)
+{
+    jobInfoTitleLabel->setText(jobObj["jobTitle"].toString());
+    jobInfoEmployerLabel->setText("Employer: " + jobObj["employerName"].toString());
+    jobInfoPaymentLabel->setText("Payment: " + jobObj["payment"].toString());
+    jobInfoDateLabel->setText("Posted: " + jobObj["dateCreated"].toString());
+    jobInfoDescriptionLabel->setText(jobObj["jobDescription"].toString());
+    
+    // Handle skills array
+    QJsonArray skillsArray = jobObj["requiredSkills"].toArray();
+    QStringList skillsList;
+    for (const auto &skill : skillsArray) {
+        skillsList << skill.toString();
+    }
+    jobInfoSkillsLabel->setText(skillsList.isEmpty() ? "No specific skills required" : skillsList.join(" • "));
+}
+
+void FreelancerPortal::loadHiringManagerInfo(const QString &employerUid)
+{
+    if (employerUid.isEmpty()) {
+        clearHiringManagerDetails();
+        return;
+    }
+    
+    BackendClient::getInstance()->getHiringManagerProfile(employerUid,
+        [this](bool success, const QJsonArray &profileArray) {
+            if (!success || profileArray.isEmpty()) {
+                clearHiringManagerDetails();
+                return;
+            }
+            
+            QJsonObject profile = profileArray[0].toObject();
+            updateHiringManagerDetails(profile);
+        });
+}
+
+void FreelancerPortal::updateHiringManagerDetails(const QJsonObject &profile)
+{
+    hmNameLabel->setText(profile["name"].toString());
+    hmEmailLabel->setText("Email: " + profile["email"].toString());
+    hmCompanyLabel->setText("Company: " + profile["companyName"].toString());
+    hmDescriptionLabel->setText(profile["description"].toString());
+    hmCompanyDescLabel->setText(profile["companyDescription"].toString());
+}
+
+void FreelancerPortal::clearJobDetails()
+{
+    jobInfoTitleLabel->setText("Select a job to view details");
+    jobInfoEmployerLabel->setText("");
+    jobInfoPaymentLabel->setText("");
+    jobInfoDateLabel->setText("");
+    jobInfoDescriptionLabel->setText("");
+    jobInfoSkillsLabel->setText("");
+}
+
+void FreelancerPortal::clearHiringManagerDetails()
+{
+    hmNameLabel->setText("Select a job to view hiring manager details");
+    hmEmailLabel->setText("");
+    hmCompanyLabel->setText("");
+    hmDescriptionLabel->setText("");
+    hmCompanyDescLabel->setText("");
+}
+
+void FreelancerPortal::editProfile()
+{
+    UserManager *userManager = UserManager::getInstance();
+    Freelancer *freelancer = userManager->getCurrentFreelancer();
+    
+    if (!freelancer) {
+        QMessageBox::warning(this, "Error", "No freelancer user found.");
+        return;
+    }
+    
+    FreelancerProfileEdit dialog(freelancer, this);
+    connect(&dialog, &FreelancerProfileEdit::profileUpdated, 
+            this, &FreelancerPortal::onProfileUpdated);
+    
+    if (dialog.exec() == QDialog::Accepted) {
+        loadUserData(); // Refresh profile display
+    }
+}
+
+void FreelancerPortal::onProfileUpdated()
+{
+    loadUserData();
+    QMessageBox::information(this, "Success", "Profile updated successfully!");
+}
+
+void FreelancerPortal::onLogoutClicked()
+{
+    QMessageBox::StandardButton reply = QMessageBox::question(
+        this, 
+        "Logout", 
+        "Are you sure you want to logout?",
+        QMessageBox::Yes | QMessageBox::No
+    );
+    
+    if (reply == QMessageBox::Yes) {
+        // Clear user data
+        UserManager::getInstance()->clearCurrentUser();
         
-            
-            // Ensure client and appliedJobsList are valid before use in nested lambdas
-            if (client && appliedJobsList) {
-                client->getAppliedJobs(freelancerId, [this, approvedJobsList, client, freelancerId, jobTitleLabel, 
-                                                    jobDescText, paymentLabel, proposalText, requestedAmountLabel, 
-                                                    statusLabel, employerNameLabel, emailLabel, companyInfoText](bool success, const QJsonArray &response) {
-                    if (!this->currentUser) { 
-                        qDebug() << "getAppliedJobs callback: Portal user logged out. Not updating UI.";
-                        return;
-                    }
-                    
-                    // Update the applied jobs list - the response is already the jobs array
-                    if (success) {
-                        appliedJobsList->clear();
-                        if (response.isEmpty()) {
-                            appliedJobsList->addItem("No applications submitted yet");
-                        } else {
-                            for (const QJsonValue& jobValue : response) {
-                                QJsonObject job = jobValue.toObject();
-                                QString jobTitle = job["jobTitle"].toString();
-                                QString employer = job["employerId"].toString();
-                                
-                                QString displayText = jobTitle + " at " + employer;
-                                QListWidgetItem* item = new QListWidgetItem(displayText);
-                                item->setData(Qt::UserRole, QVariant(job));
-                                appliedJobsList->addItem(item);
-                            }
-                        }
-                    } else {
-                        appliedJobsList->clear();
-                        appliedJobsList->addItem("Failed to load applied jobs");
-                    }
-                    
-                    // IMPORTANT: Only call getApprovedJobs after the first API call completes
-                    if (client && approvedJobsList) {
-                        client->getApprovedJobs(freelancerId, [this, approvedJobsList](bool success, const QJsonArray &response) {
-                            if (!this->currentUser) {
-                                qDebug() << "getApprovedJobs callback: Portal user logged out. Not updating UI.";
-                                return;
-                            }
-                            
-                            // The response is already the jobs array
-                            if (success) {
-                                approvedJobsList->clear();
-                                if (response.isEmpty()) {
-                                    approvedJobsList->addItem("No approved jobs yet");
-                                } else {
-                                    for (const QJsonValue& jobValue : response) {
-                                        QJsonObject job = jobValue.toObject();
-                                        QString jobTitle = job["jobTitle"].toString();
-                                        QString employer = job["employerId"].toString();
-                                        QString displayText = "✓ " + jobTitle + " at " + employer;
-                                        QListWidgetItem* item = new QListWidgetItem(displayText);
-                                        item->setData(Qt::UserRole, QVariant(job));
-                                        approvedJobsList->addItem(item);
-                                    }
-                                }
-                            } else {
-                                approvedJobsList->clear();
-                                approvedJobsList->addItem("Failed to load approved jobs");
-                            }
-                        });
-                    }
-                });
-            }
-        } catch (const std::exception& e) {
-            qDebug() << "Outer exception in createMessagesTab timer callback:" << e.what();
-            if (appliedJobsList) {
-                appliedJobsList->clear();
-                appliedJobsList->addItem("Error loading data. Please try again.");
-            }
-        } catch (...) {
-            qDebug() << "Unknown outer exception in createMessagesTab timer callback";
-            if (appliedJobsList) {
-                appliedJobsList->clear();
-                appliedJobsList->addItem("Unknown error loading data. Please try again.");
-            }
-        } });
+        // Sign out from backend
+        BackendClient::getInstance()->signOut([this](bool success) {
+            Q_UNUSED(success)
+            // Return to home page regardless of backend result
+            emit returnToHomeRequested();
+        });
+    }
+}
 
-    return messagesWidget;
+void FreelancerPortal::refreshAllData()
+{
+    loadUserData();
+    loadAppliedJobs();
+    loadApprovedJobs();
 }

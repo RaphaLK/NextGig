@@ -78,26 +78,38 @@ void HomeWindow::createAndShowFreelancerPortal()
 {
     // Check if we already have a freelancer portal
     if (freelancerIndex >= 0) {
-        // Remove the old portal if it exists
-        QWidget* oldPortal = stack->widget(freelancerIndex);
-        if (oldPortal) {
-            stack->removeWidget(oldPortal);
-            delete oldPortal;
-        }
+        // Just show the existing portal instead of recreating
+        stack->setCurrentIndex(freelancerIndex);
+        return;
     }
     
-    // Create a new portal
+    // Create a new portal only if it doesn't exist
     FreelancerPortal *portal = new FreelancerPortal();
     freelancerIndex = stack->addWidget(portal);
-    
-    // Connect its navigation signals
+
     connect(portal, &FreelancerPortal::returnToHomeRequested, 
-            [this](){ stack->setCurrentIndex(0); });
+            [this](){ 
+                stack->setCurrentIndex(0); 
+                // Optionally clear the portal when returning home
+                // clearFreelancerPortal();
+            });
     
     // Show the portal
     stack->setCurrentIndex(freelancerIndex);
 }
 
+// Add this method to properly clear the portal when needed
+void HomeWindow::clearFreelancerPortal()
+{
+    if (freelancerIndex >= 0) {
+        QWidget* oldPortal = stack->widget(freelancerIndex);
+        if (oldPortal) {
+            stack->removeWidget(oldPortal);
+            delete oldPortal;
+        }
+        freelancerIndex = -1;
+    }
+}
 
 QWidget *HomeWindow::RenderHomePage()
 {

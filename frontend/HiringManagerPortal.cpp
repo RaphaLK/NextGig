@@ -25,6 +25,7 @@
 #include "JobFeed.h"
 #include <QTimer>
 
+
 HiringManagerPortal::HiringManagerPortal(QWidget *parent) : QWidget(parent), currentUser(nullptr)
 {
     QVBoxLayout *mainLayout = new QVBoxLayout(this);
@@ -588,7 +589,15 @@ QWidget *HiringManagerPortal::createProfileTab()
 
 QWidget *HiringManagerPortal::createPostJobTab()
 {
-    return new JobFeed(this, false);
+    // Create or reuse the shared JobFeed
+    QWidget *container = new QWidget(this);
+    QVBoxLayout *layout = new QVBoxLayout(container);
+    
+    // Create a new JobFeed specifically for this HiringManager portal
+    JobFeed *hiringManagerJobFeed = new JobFeed(container, false); // Set parent immediately
+    layout->addWidget(hiringManagerJobFeed);
+    
+    return container;
 }
 
 QWidget *HiringManagerPortal::createMessagesTab()
