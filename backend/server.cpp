@@ -281,7 +281,6 @@ void Server::serverLoop()
         clientThread.detach();
     }
 }
-
 void Server::handleClient(int clientSocket)
 {
     // Buffer to store incoming data
@@ -308,18 +307,40 @@ void Server::handleClient(int clientSocket)
             // Add to request buffer
             requestBuffer += buffer;
 
-            // Check if we have a complete request
+            // Check for JSON based protocol - first line contains the size of the JSON object
             size_t newlinePos = requestBuffer.find('\n');
             while (newlinePos != std::string::npos)
             {
-                // Extract complete request
-                std::string request = requestBuffer.substr(0, newlinePos);
+                std::string sizeStr = requestBuffer.substr(0, newlinePos);
                 requestBuffer = requestBuffer.substr(newlinePos + 1);
-
-                // Process the request
-                processRequest(clientSocket, request);
-
-                // Check for more complete requests in buffer
+                
+                // Try to parse the size
+                try {
+                    int jsonSize = std::stoi(sizeStr);
+                    
+                    // Check if we have enough data for the JSON object
+                    if (static_cast<int>(requestBuffer.size()) >= jsonSize)
+                    {
+                        // Extract the JSON data
+                        std::string jsonData = requestBuffer.substr(0, jsonSize);
+                        requestBuffer = requestBuffer.substr(jsonSize);
+                        
+                        // Process the request
+                        processRequest(clientSocket, jsonData);
+                    }
+                    else
+                    {
+                        // Not enough data yet, break the loop and wait for more
+                        break;
+                    }
+                }
+                catch (const std::exception& e)
+                {
+                    // Invalid size format, discard this line
+                    std::cerr << "Invalid size format: " << sizeStr << std::endl;
+                }
+                
+                // Look for next size indicator
                 newlinePos = requestBuffer.find('\n');
             }
         }

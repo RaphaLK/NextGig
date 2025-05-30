@@ -10,7 +10,11 @@
 // Initialize static instance
 BackendClient *BackendClient::instance = nullptr;
 
-BackendClient::BackendClient(QObject *parent) : QObject(parent), connected(false)
+BackendClient::BackendClient(QObject *parent) : QObject(parent), 
+    socket(new QTcpSocket(this)), 
+    connected(false), 
+    currentUser(nullptr),
+    requestInProgress(false) 
 {
     socket = new QTcpSocket(this);
 
@@ -19,6 +23,79 @@ BackendClient::BackendClient(QObject *parent) : QObject(parent), connected(false
     connect(socket, &QTcpSocket::disconnected, this, &BackendClient::onDisconnected);
     connect(socket, &QTcpSocket::readyRead, this, &BackendClient::onReadyRead);
     connect(socket, &QTcpSocket::errorOccurred, this, &BackendClient::onError);
+}
+
+void BackendClient::sendRequest(const QJsonObject &request, std::function<void(const QJsonObject &)> callback)
+{
+    // Create a new request and add it to the queue
+    QueuedRequest queuedRequest{request, callback};
+    
+    {
+        // Lock the queue while modifying it
+        std::lock_guard<std::mutex> lock(queueMutex);
+        requestQueue.push(queuedRequest);
+    }
+    
+    // If no request is in progress, start processing
+    if (!requestInProgress) {
+        processNextRequest();
+    }
+}
+
+void BackendClient::processNextRequest()
+{
+    QueuedRequest currentRequest;
+    
+    {
+        // Lock the queue while accessing it
+        std::lock_guard<std::mutex> lock(queueMutex);
+        
+        // If queue is empty, we're done
+        if (requestQueue.empty()) {
+            requestInProgress = false;
+            return;
+        }
+        
+        // Get next request and mark as in progress
+        currentRequest = requestQueue.front();
+        requestQueue.pop();
+        requestInProgress = true;
+    }
+    
+    // Check connection first
+    if (!isConnected()) {
+        qDebug() << "Cannot send request: not connected to server";
+        currentRequest.callback(QJsonObject{{"status", "error"}, {"message", "Not connected to server"}});
+        
+        // Process the next request
+        processNextRequest();
+        return;
+    }
+    
+    // Connect to the response signal just for this request
+    QMetaObject::Connection connection = connect(this, &BackendClient::serverResponseReceived,
+            [this, callback = currentRequest.callback, connection = QMetaObject::Connection()](const QJsonObject &response) mutable {
+                // Disconnect after receiving the response
+                disconnect(connection);
+                
+                // Pass the response to the callback
+                callback(response);
+                
+                // Process next request in the queue
+                processNextRequest();
+            });
+    
+    // Convert request to JSON
+    QJsonDocument doc(currentRequest.request);
+    QByteArray jsonData = doc.toJson();
+    
+    // Add size header (assuming the server expects it)
+    QByteArray sizeHeader = QByteArray::number(jsonData.size());
+    sizeHeader.append('\n');
+    
+    // Send the data
+    socket->write(sizeHeader);
+    socket->write(jsonData);
 }
 
 BackendClient *BackendClient::getInstance()
@@ -266,36 +343,36 @@ void BackendClient::isHiringManager(const QString &uid, std::function<void(bool)
         callback(isManager); });
 }
 
-void BackendClient::sendRequest(const QJsonObject &request, std::function<void(const QJsonObject &)> callback)
-{
-    if (!connected)
-    {
-        QJsonObject errorResponse;
-        errorResponse["status"] = "error";
-        errorResponse["error"] = "Not connected to server";
-        callback(errorResponse);
-        return;
-    }
+// void BackendClient::sendRequest(const QJsonObject &request, std::function<void(const QJsonObject &)> callback)
+// {
+//     if (!connected)
+//     {
+//         QJsonObject errorResponse;
+//         errorResponse["status"] = "error";
+//         errorResponse["error"] = "Not connected to server";
+//         callback(errorResponse);
+//         return;
+//     }
 
-    // Convert request to JSON and send
-    QJsonDocument doc(request);
-    QByteArray jsonData = doc.toJson(QJsonDocument::Compact);
+//     // Convert request to JSON and send
+//     QJsonDocument doc(request);
+//     QByteArray jsonData = doc.toJson(QJsonDocument::Compact);
 
-    qDebug() << "Sending request:" << doc.toJson() << Qt::endl;
+//     qDebug() << "Sending request:" << doc.toJson() << Qt::endl;
 
-    jsonData.append('\n');
+//     jsonData.append('\n');
 
-    // Send the data
-    socket->write(jsonData);
-    socket->flush();
+//     // Send the data
+//     socket->write(jsonData);
+//     socket->flush();
 
-    connect(this, &BackendClient::serverResponseReceived, this, [callback, this](const QJsonObject &response)
-            {
-        qDebug() << "Received response:" << response << Qt::endl;
-        callback(response);
-        // Disconnect after handling this response
-        disconnect(this, &BackendClient::serverResponseReceived, this, nullptr); });
-}
+//     connect(this, &BackendClient::serverResponseReceived, this, [callback, this](const QJsonObject &response)
+//             {
+//         qDebug() << "Received response:" << response << Qt::endl;
+//         callback(response);
+//         // Disconnect after handling this response
+//         disconnect(this, &BackendClient::serverResponseReceived, this, nullptr); });
+// }
 
 void BackendClient::onConnected()
 {
@@ -305,40 +382,73 @@ void BackendClient::onConnected()
 
 void BackendClient::onDisconnected()
 {
+    qDebug() << "Disconnected from server";
     connected = false;
-    qDebug() << "Disconnected from backend server" << Qt::endl;
+    
+    // Reset the request in progress flag
+    requestInProgress = false;
+    
+    // Clear the queue on disconnect
+    {
+        std::lock_guard<std::mutex> lock(queueMutex);
+        std::queue<QueuedRequest> empty;
+        std::swap(requestQueue, empty);
+    }
 }
 
 void BackendClient::onError(QAbstractSocket::SocketError socketError)
 {
-    QString errorMsg = socket->errorString();
-    qDebug() << "Socket error: " << errorMsg << Qt::endl;
-    emit connectionError(errorMsg);
+    QString errorMessage = socket->errorString();
+    qDebug() << "Socket error:" << errorMessage;
+    emit connectionError(errorMessage);
+    
+    // In case of error, reset the requestInProgress flag and process next request
+    requestInProgress = false;
+    processNextRequest();
 }
 
 void BackendClient::onReadyRead()
 {
-    QByteArray jsonData = socket->readAll();
-    qDebug() << "Received data:" << jsonData << Qt::endl;
-
-    QList<QByteArray> messages = jsonData.split('\n');
-
-    for (const QByteArray &message : messages)
-    {
-        QByteArray trimmed = message.trimmed();
-        if (trimmed.isEmpty())
-            continue;
-
-        QJsonParseError parseError;
-        QJsonDocument doc = QJsonDocument::fromJson(trimmed, &parseError);
-
-        if (doc.isNull())
-        {
-            qDebug() << "Invalid JSON part received:" << trimmed;
-            qDebug() << "Parse error:" << parseError.errorString() << Qt::endl;
+    // Buffer for accumulated data
+    static QByteArray buffer;
+    
+    // Append new data to buffer
+    buffer.append(socket->readAll());
+    qDebug() << "Buffer now contains:" << buffer.size() << "bytes";
+    
+    // Process complete JSON objects in the buffer
+    int processedLength = 0;
+    
+    while (!buffer.isEmpty()) {
+        // Try to find the end of a JSON object
+        int endPos = buffer.indexOf('\n');
+        if (endPos == -1) {
+            // No complete response yet, wait for more data
+            break;
+        }
+        
+        // Extract one complete JSON object
+        QByteArray jsonData = buffer.left(endPos).trimmed();
+        
+        // Remove the processed data from the buffer
+        buffer.remove(0, endPos + 1);
+        
+        // Skip empty lines
+        if (jsonData.isEmpty()) {
             continue;
         }
-
+        
+        qDebug() << "Processing JSON response:" << jsonData;
+        
+        // Parse JSON response
+        QJsonParseError parseError;
+        QJsonDocument doc = QJsonDocument::fromJson(jsonData, &parseError);
+        
+        if (doc.isNull() || !doc.isObject()) {
+            qDebug() << "Invalid JSON received:" << parseError.errorString() << ", data:" << jsonData;
+            continue;
+        }
+        
         QJsonObject response = doc.object();
         emit serverResponseReceived(response);
     }
@@ -693,8 +803,9 @@ void BackendClient::getApprovedJobs(const QString &freelancerId, std::function<v
     sendRequest(request,
             [callback](const QJsonObject &response)
             {
+                qDebug() << "BOOM BOOM BOOM" << Qt::endl;
                 bool success = (response["status"].toString() == "success");
-                
+
                 if (success && response.contains("approvedJobs"))
                 {
                     QJsonArray approvedJobs = response["approvedJobs"].toArray();

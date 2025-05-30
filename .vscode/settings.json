@@ -77,6 +77,8 @@
     "qdebug": "cpp",
     "qformlayout": "cpp",
     "qtextedit": "cpp",
-    "qlistwidget": "cpp"
+    "qlistwidget": "cpp",
+    "qhboxlayout": "cpp",
+    "qscrollarea": "cpp"
   }
 }

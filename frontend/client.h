@@ -1,15 +1,25 @@
 #pragma once
 #include <QObject>
+#include <QJsonObject>
 #include <QString>
 #include <QtNetwork/QTcpSocket>
 #include <functional>
 #include <memory>
+#include <queue>
+#include <mutex>
 #include "../backend/server.h"
 #include "User.h"
 #include "Freelancer.h"
 #include "HiringManager.h"
 #include "Job.h"
 #include "Proposal.h"
+
+// Structure to represent a queued request
+struct QueuedRequest {
+    QJsonObject request;
+    std::function<void(const QJsonObject &)> callback;
+};
+
 class BackendClient : public QObject
 {
     Q_OBJECT
@@ -19,8 +29,17 @@ private:
     QTcpSocket *socket;
     bool connected;
     User *currentUser;
+    
+    // Request queue members
+    std::queue<QueuedRequest> requestQueue;
+    std::mutex queueMutex;
+    bool requestInProgress;
+    
     // Private constructor for singleton
     explicit BackendClient(QObject *parent = nullptr);
+    
+    // Process the next request in the queue
+    void processNextRequest();
 
 public:
     // Get singleton instance
@@ -40,13 +59,14 @@ public:
                       std::function<void(firebase::auth::User *, const QString &)> callback);
 
     void signOut(std::function<void(bool)> callback);
+    
+    // Queue-based sendRequest that replaces the old one
+    void sendRequest(const QJsonObject &request, std::function<void(const QJsonObject &)> callback);
     User *getCurrentUser() { return currentUser; }
     // TODO: Implement
     void getProfile(const QString &uid, std::function<void(const QJsonObject &)> callback);
     // User data methods
     void isHiringManager(const QString &uid, std::function<void(bool)> callback);
-    // Helper for sending/receiving JSON data
-    void sendRequest(const QJsonObject &request, std::function<void(const QJsonObject &)> callback);
 
     void updateFreelancerProfile(Freelancer *freelancer, std::function<void(bool)> callback);
     void updateHiringManagerProfile(HiringManager *hiringManager, std::function<void(bool)> callback);
