@@ -23,6 +23,12 @@
 #include <QJsonValue>
 #include "UserManager.h"
 #include "JobFeed.h"
+#include <QFormLayout>
+#include <QLineEdit>
+#include <QTextEdit>
+#include <QRandomGenerator>
+#include <QDate>
+#include <QDateTime>
 #include <QTimer>
 
 
@@ -589,15 +595,169 @@ QWidget *HiringManagerPortal::createProfileTab()
 
 QWidget *HiringManagerPortal::createPostJobTab()
 {
-    // Create or reuse the shared JobFeed
-    QWidget *container = new QWidget(this);
-    QVBoxLayout *layout = new QVBoxLayout(container);
+    QWidget *postJobWidget = new QWidget();
+    QVBoxLayout *mainLayout = new QVBoxLayout(postJobWidget);
     
-    // Create a new JobFeed specifically for this HiringManager portal
-    JobFeed *hiringManagerJobFeed = new JobFeed(container, false); // Set parent immediately
-    layout->addWidget(hiringManagerJobFeed);
+    // Create a scrollable area for the form
+    QScrollArea *scrollArea = new QScrollArea();
+    QWidget *formWidget = new QWidget();
+    QVBoxLayout *formLayout = new QVBoxLayout(formWidget);
     
-    return container;
+    // Job posting form
+    QGroupBox *jobFormGroup = new QGroupBox("Post New Job");
+    QFormLayout *jobFormLayout = new QFormLayout();
+    
+    // Job title
+    QLineEdit *jobTitleEdit = new QLineEdit();
+    jobTitleEdit->setPlaceholderText("Enter job title...");
+    jobFormLayout->addRow("Job Title*:", jobTitleEdit);
+    
+    // Job description
+    QTextEdit *jobDescEdit = new QTextEdit();
+    jobDescEdit->setPlaceholderText("Describe the job requirements, responsibilities, and any other relevant details...");
+    jobDescEdit->setMinimumHeight(150);
+    jobFormLayout->addRow("Job Description*:", jobDescEdit);
+    
+    // Payment/Budget
+    QLineEdit *paymentEdit = new QLineEdit();
+    paymentEdit->setPlaceholderText("e.g., 2500");
+    jobFormLayout->addRow("Budget ($)*:", paymentEdit);
+    
+    // Required skills
+    QLineEdit *skillsEdit = new QLineEdit();
+    skillsEdit->setPlaceholderText("e.g., React, TypeScript, Node.js (comma separated)");
+    jobFormLayout->addRow("Required Skills*:", skillsEdit);
+    
+    // Expiry date (optional)
+    QLineEdit *expiryEdit = new QLineEdit();
+    expiryEdit->setPlaceholderText("YYYY-MM-DD (optional)");
+    jobFormLayout->addRow("Expiry Date:", expiryEdit);
+    
+    jobFormGroup->setLayout(jobFormLayout);
+    
+    // Buttons
+    QHBoxLayout *buttonLayout = new QHBoxLayout();
+    QPushButton *postJobBtn = new QPushButton("Post Job");
+    postJobBtn->setStyleSheet("background-color: #28a745; color: white; padding: 10px 20px; font-size: 14px;");
+    
+    QPushButton *clearFormBtn = new QPushButton("Clear Form");
+    clearFormBtn->setStyleSheet("background-color: #6c757d; color: white; padding: 10px 20px; font-size: 14px;");
+    
+    buttonLayout->addStretch();
+    buttonLayout->addWidget(clearFormBtn);
+    buttonLayout->addWidget(postJobBtn);
+    
+    // Connect clear button
+    connect(clearFormBtn, &QPushButton::clicked, [=]() {
+        jobTitleEdit->clear();
+        jobDescEdit->clear();
+        paymentEdit->clear();
+        skillsEdit->clear();
+        expiryEdit->clear();
+    });
+    
+    // Connect post job button - THIS IS WHERE WE CALL addJob
+    connect(postJobBtn, &QPushButton::clicked, [=]() {
+        // Validate required fields
+        if (jobTitleEdit->text().trimmed().isEmpty()) {
+            QMessageBox::warning(this, "Validation Error", "Job title is required.");
+            return;
+        }
+        
+        if (jobDescEdit->toPlainText().trimmed().isEmpty()) {
+            QMessageBox::warning(this, "Validation Error", "Job description is required.");
+            return;
+        }
+        
+        if (paymentEdit->text().trimmed().isEmpty()) {
+            QMessageBox::warning(this, "Validation Error", "Budget is required.");
+            return;
+        }
+        
+        if (skillsEdit->text().trimmed().isEmpty()) {
+            QMessageBox::warning(this, "Validation Error", "Required skills are required.");
+            return;
+        }
+        
+        // Get current hiring manager
+        HiringManager* hiringManager = UserManager::getInstance()->getCurrentHiringManager();
+        if (!hiringManager) {
+            QMessageBox::warning(this, "Error", "You must be logged in as a hiring manager to post jobs.");
+            return;
+        }
+        
+        // Parse skills (comma separated)
+        QStringList skillsList = skillsEdit->text().split(",", Qt::SkipEmptyParts);
+        std::vector<std::string> requiredSkills;
+        for (const QString &skill : skillsList) {
+            requiredSkills.push_back(skill.trimmed().toStdString());
+        }
+        
+        // Generate unique job ID (you might want a better method)
+        QString jobId = QString("job_%1_%2")
+            .arg(QDateTime::currentDateTime().toSecsSinceEpoch())
+            .arg(QRandomGenerator::global()->bounded(1000, 9999));
+        
+        // Get current date
+        QString currentDate = QDate::currentDate().toString("yyyy-MM-dd");
+        
+        // Create Job object
+        Job newJob(
+            jobId.toStdString(),                           // jobId
+            jobTitleEdit->text().trimmed().toStdString(),  // title
+            jobDescEdit->toPlainText().trimmed().toStdString(), // description
+            hiringManager->getName(),                      // employer (hiring manager name)
+            currentDate.toStdString(),                     // dateCreated
+            expiryEdit->text().trimmed().toStdString(),    // expiryDate (can be empty)
+            requiredSkills,                                // requiredSkills
+            paymentEdit->text().trimmed().toStdString()    // payment
+        );
+        
+        // Disable the post button while processing
+        postJobBtn->setEnabled(false);
+        postJobBtn->setText("Posting...");
+        
+        // Call the addJob method from BackendClient
+        BackendClient::getInstance()->addJob(newJob, [=](bool success) {
+            // Re-enable the button
+            postJobBtn->setEnabled(true);
+            postJobBtn->setText("Post Job");
+            
+            if (success) {
+                QMessageBox::information(this, "Success", 
+                    "Job posted successfully!\n\nJob ID: " + jobId);
+                
+                // Clear the form after successful posting
+                jobTitleEdit->clear();
+                jobDescEdit->clear();
+                paymentEdit->clear();
+                skillsEdit->clear();
+                expiryEdit->clear();
+                
+                // Optionally refresh any job lists
+                // You might want to emit a signal here to refresh other components
+                
+            } else {
+                QMessageBox::warning(this, "Error", 
+                    "Failed to post job. Please check your connection and try again.");
+            }
+        });
+    });
+    
+    // Add everything to the form layout
+    formLayout->addWidget(jobFormGroup);
+    formLayout->addLayout(buttonLayout);
+    formLayout->addStretch();
+    
+    // Set up scroll area
+    scrollArea->setWidget(formWidget);
+    scrollArea->setWidgetResizable(true);
+    scrollArea->setHorizontalScrollBarPolicy(Qt::ScrollBarAsNeeded);
+    scrollArea->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
+    
+    mainLayout->addWidget(scrollArea);
+    
+    return postJobWidget;
 }
 
 QWidget *HiringManagerPortal::createMessagesTab()

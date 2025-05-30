@@ -616,8 +616,8 @@ void Server::processRequest(int clientSocket, const std::string &request)
                         // Get job history TODO:                    }
                     else
                     {
-                        response["status"] = "error";
-                        response["error"] = "Profile not found";
+                        // response["status"] = "error";
+                        // response["error"] = "Profile not found"; not worth doing this
                     }
                 }
 
