@@ -131,14 +131,15 @@ firebase::auth::User *Server::registerUser(const std::string &email, const std::
             
             userData["tags"] = firebase::firestore::FieldValue::Array(emptyTags);
             userData["accomplishments"] = firebase::firestore::FieldValue::Array(emptyAccomplishments);
-            
-            // Create empty education struct
+                        
             firebase::firestore::MapFieldValue education;
-            education["jobTitle"] = firebase::firestore::FieldValue::String("");
+            education["school"] = firebase::firestore::FieldValue::String(""); 
+            education["degreeLvl"] = firebase::firestore::FieldValue::String(""); 
+            education["degree_lvl"] = firebase::firestore::FieldValue::String(""); 
             education["startDate"] = firebase::firestore::FieldValue::String("");
             education["endDate"] = firebase::firestore::FieldValue::String("");
             education["description"] = firebase::firestore::FieldValue::String("");
-            
+            userData["education"] = firebase::firestore::FieldValue::Map(education);
             userData["education"] = firebase::firestore::FieldValue::Map(education);
             userData["jobHistory"] = firebase::firestore::FieldValue::Array(emptyJobHistory);
             
@@ -422,6 +423,9 @@ void Server::processRequest(int clientSocket, const std::string &request)
             firebase::firestore::DocumentReference userDoc = firestore->Collection("users").Document(uid);
             auto userFuture = userDoc.Get();
             
+             // Fix the signin section to properly parse all fields from Firebase:
+            
+            // In the signin section, replace the user data parsing part:
             userFuture.OnCompletion([this, clientSocket, uid, result](const firebase::Future<firebase::firestore::DocumentSnapshot> &future) {
                 QJsonObject response;
                 
@@ -481,9 +485,11 @@ void Server::processRequest(int clientSocket, const std::string &request)
                             if (hourlyRate.is_double()) {
                                 response["hourlyRate"] = hourlyRate.double_value();
                             } else {
-                                response["hourlyRate"] = "0";
+                                response["hourlyRate"] = 0.0;
                             }
                         }
+                        
+                        // Parse skills array
                         auto skillsField = snapshot.Get("skills");
                         if (skillsField.is_array()) {
                             QJsonArray skillsArray;
@@ -494,10 +500,10 @@ void Server::processRequest(int clientSocket, const std::string &request)
                             }
                             response["skills"] = skillsArray;
                         } else {
-                            response["skills"] = QJsonArray(); // Empty array if no skills found
+                            response["skills"] = QJsonArray();
                         }
                         
-                        // Add education object to the response
+                        // Parse education object - FIX THE FIELD PARSING
                         auto educationField = snapshot.Get("education");
                         if (educationField.is_map()) {
                             QJsonObject educationObj;
@@ -510,15 +516,126 @@ void Server::processRequest(int clientSocket, const std::string &request)
                                 educationObj["school"] = "";
                             }
                             
-                            auto degreeLvl = eduMap.find("degree_lvl");
+                            // Check both field name variations
+                            auto degreeLvl = eduMap.find("degreeLvl");
+                            if (degreeLvl == eduMap.end()) {
+                                degreeLvl = eduMap.find("degree_lvl"); // Try alternative field name
+                            }
                             if (degreeLvl != eduMap.end() && degreeLvl->second.is_string()) {
+                                educationObj["degreeLvl"] = QString::fromStdString(degreeLvl->second.string_value());
                                 educationObj["degree_lvl"] = QString::fromStdString(degreeLvl->second.string_value());
                             } else {
+                                educationObj["degreeLvl"] = "";
                                 educationObj["degree_lvl"] = "";
                             }
                             
+                            auto startDate = eduMap.find("startDate");
+                            if (startDate != eduMap.end() && startDate->second.is_string()) {
+                                educationObj["startDate"] = QString::fromStdString(startDate->second.string_value());
+                            } else {
+                                educationObj["startDate"] = "";
+                            }
+                            
+                            auto endDate = eduMap.find("endDate");
+                            if (endDate != eduMap.end() && endDate->second.is_string()) {
+                                educationObj["endDate"] = QString::fromStdString(endDate->second.string_value());
+                            } else {
+                                educationObj["endDate"] = "";
+                            }
+                            
+                            auto eduDescription = eduMap.find("description");
+                            if (eduDescription != eduMap.end() && eduDescription->second.is_string()) {
+                                educationObj["description"] = QString::fromStdString(eduDescription->second.string_value());
+                            } else {
+                                educationObj["description"] = "";
+                            }
+                            
                             response["education"] = educationObj;
+                        } else {
+                            // Provide default education object
+                            QJsonObject defaultEducation;
+                            defaultEducation["school"] = "";
+                            defaultEducation["degreeLvl"] = "";
+                            defaultEducation["degree_lvl"] = "";
+                            defaultEducation["startDate"] = "";
+                            defaultEducation["endDate"] = "";
+                            defaultEducation["description"] = "";
+                            response["education"] = defaultEducation;
                         }
+                        
+                        // Parse accomplishments array - ADD THIS MISSING SECTION
+                        auto accomplishmentsField = snapshot.Get("accomplishments");
+                        if (accomplishmentsField.is_array()) {
+                            QJsonArray accomplishmentsArray;
+                            for (const auto& accomplishment : accomplishmentsField.array_value()) {
+                                if (accomplishment.is_string()) {
+                                    accomplishmentsArray.append(QString::fromStdString(accomplishment.string_value()));
+                                }
+                            }
+                            response["accomplishments"] = accomplishmentsArray;
+                        } else {
+                            response["accomplishments"] = QJsonArray(); // Empty array if no accomplishments found
+                        }
+            
+                        // Parse tags array - ADD THIS MISSING SECTION
+                        auto tagsField = snapshot.Get("tags");
+                        if (tagsField.is_array()) {
+                            QJsonArray tagsArray;
+                            for (const auto& tag : tagsField.array_value()) {
+                                if (tag.is_string()) {
+                                    tagsArray.append(QString::fromStdString(tag.string_value()));
+                                }
+                            }
+                            response["tags"] = tagsArray;
+                        } else {
+                            response["tags"] = QJsonArray(); // Empty array if no tags found
+                        }
+            
+                        // Parse job history array - ADD THIS MISSING SECTION
+                        auto jobHistoryField = snapshot.Get("jobHistory");
+                        if (jobHistoryField.is_array()) {
+                            QJsonArray jobHistoryArray;
+                            for (const auto& job : jobHistoryField.array_value()) {
+                                if (job.is_map()) {
+                                    QJsonObject jobObj;
+                                    auto jobMap = job.map_value();
+                                    
+                                    auto jobTitle = jobMap.find("jobTitle");
+                                    if (jobTitle != jobMap.end() && jobTitle->second.is_string()) {
+                                        jobObj["jobTitle"] = QString::fromStdString(jobTitle->second.string_value());
+                                    } else {
+                                        jobObj["jobTitle"] = "";
+                                    }
+                                    
+                                    auto startDate = jobMap.find("startDate");
+                                    if (startDate != jobMap.end() && startDate->second.is_string()) {
+                                        jobObj["startDate"] = QString::fromStdString(startDate->second.string_value());
+                                    } else {
+                                        jobObj["startDate"] = "";
+                                    }
+                                    
+                                    auto endDate = jobMap.find("endDate");
+                                    if (endDate != jobMap.end() && endDate->second.is_string()) {
+                                        jobObj["endDate"] = QString::fromStdString(endDate->second.string_value());
+                                    } else {
+                                        jobObj["endDate"] = "";
+                                    }
+                                    
+                                    auto description = jobMap.find("description");
+                                    if (description != jobMap.end() && description->second.is_string()) {
+                                        jobObj["description"] = QString::fromStdString(description->second.string_value());
+                                    } else {
+                                        jobObj["description"] = "";
+                                    }
+                                    
+                                    jobHistoryArray.append(jobObj);
+                                }
+                            }
+                            response["jobHistory"] = jobHistoryArray;
+                        } else {
+                            response["jobHistory"] = QJsonArray(); // Empty array if no job history found
+                        }
+                        
                     } else {
                         // User exists in Auth but not in Firestore
                         response["status"] = "error";
@@ -563,67 +680,236 @@ void Server::processRequest(int clientSocket, const std::string &request)
                          sendResponse(clientSocket, responseDoc.toJson(QJsonDocument::Compact).toStdString());
                      });
     }
+
     else if (requestType == "getProfile")
     {
         QString uid = jsonRequest["uid"].toString();
+        QString employerId = jsonRequest["employerId"].toString();
 
-        // Get user reference
-        firebase::firestore::DocumentReference userRef = firestore->Collection("users").Document(uid.toStdString());
+        // Use uid if available, otherwise fall back to employerId
+        QString lookupId = !uid.isEmpty() ? uid : employerId;
 
-        // Get the document
-        auto future = userRef.Get();
-        future.OnCompletion([this, clientSocket](const firebase::Future<firebase::firestore::DocumentSnapshot> &future)
-                            {
-                QJsonObject response;
+        if (lookupId.isEmpty())
+        {
+            QJsonObject errorResponse;
+            errorResponse["status"] = "error";
+            errorResponse["error"] = "getProfile requires either uid or employerId";
+            sendResponse(clientSocket, QJsonDocument(errorResponse).toJson(QJsonDocument::Compact).toStdString());
+            return;
+        }
 
-                if (future.error() != firebase::firestore::kErrorOk)
+        qDebug() << "Getting profile for ID:" << lookupId;
+
+        // Function to process profile data once found
+        auto processProfile = [this, clientSocket](const firebase::firestore::DocumentSnapshot &snapshot, const QString &identifier)
+        {
+            QJsonObject response;
+
+            if (snapshot.exists())
+            {
+                qDebug() << "Profile found for identifier:" << identifier;
+
+                // Create a success response with all user data
+                response["status"] = "success";
+                response["uid"] = QString::fromStdString(snapshot.id());
+
+                // Get basic fields
+                auto username = snapshot.Get("username");
+                auto email = snapshot.Get("email");
+                auto description = snapshot.Get("description");
+                auto accountType = snapshot.Get("accountType");
+
+                if (username.is_string())
                 {
-                    response["status"] = "error";
-                    response["error"] = future.error_message();
+                    response["name"] = QString::fromStdString(username.string_value());
+                    response["username"] = QString::fromStdString(username.string_value()); // Add username field
                 }
                 else
                 {
-                    firebase::firestore::DocumentSnapshot snapshot = *future.result();
-
-                    if (snapshot.exists())
-                    {
-                        // Create a success response with all user data
-                        response["status"] = "success";
-
-                        // Get basic fields
-                        auto name = snapshot.Get("username");
-                        auto email = snapshot.Get("email");
-                        auto description = snapshot.Get("description");
-
-                        if (name.is_string())
-                            response["name"] = QString::fromStdString(name.string_value());
-                        if (email.is_string())
-                            response["email"] = QString::fromStdString(email.string_value());
-                        if (description.is_string())
-                            response["description"] = QString::fromStdString(description.string_value());
-
-                        // Get company fields for hiring manager
-                        auto companyName = snapshot.Get("companyName");
-                        auto companyDesc = snapshot.Get("companyDescription");
-
-                        if (companyName.is_string())
-                            response["companyName"] = QString::fromStdString(companyName.string_value());
-                        if (companyDesc.is_string())
-                            response["companyDescription"] = QString::fromStdString(companyDesc.string_value());
-
-                        // Get arrays (tags, accomplishments) TODO:
-
-                        // Get job history TODO:                    }
-                    else
-                    {
-                        response["status"] = "error";
-                        response["error"] = "Profile not found";
-                    }
+                    response["name"] = "No Name";
+                    response["username"] = "No Username";
                 }
 
-                QJsonDocument responseDoc(response);
-                sendResponse(clientSocket, responseDoc.toJson(QJsonDocument::Compact).toStdString());
-            } });
+                if (email.is_string())
+                {
+                    response["email"] = QString::fromStdString(email.string_value());
+                }
+                else
+                {
+                    response["email"] = "No Email";
+                }
+
+                if (description.is_string())
+                {
+                    response["description"] = QString::fromStdString(description.string_value());
+                }
+                else
+                {
+                    response["description"] = "No description available";
+                }
+
+                // Get company fields for hiring manager
+                auto companyName = snapshot.Get("companyName");
+                auto companyDesc = snapshot.Get("companyDescription");
+
+                if (companyName.is_string())
+                {
+                    response["companyName"] = QString::fromStdString(companyName.string_value());
+                }
+                else
+                {
+                    response["companyName"] = "No Company";
+                }
+
+                if (companyDesc.is_string())
+                {
+                    response["companyDescription"] = QString::fromStdString(companyDesc.string_value());
+                }
+                else
+                {
+                    response["companyDescription"] = "No Company Description";
+                }
+
+                // Add ratings data
+                auto ratingsField = snapshot.Get("ratings");
+                if (ratingsField.is_array())
+                {
+                    QJsonArray ratingsArray;
+                    for (const auto &ratingValue : ratingsField.array_value())
+                    {
+                        if (ratingValue.is_map())
+                        {
+                            QJsonObject ratingObj;
+                            auto ratingMap = ratingValue.map_value();
+
+                            // Extract rating fields
+                            auto fromUserIdIter = ratingMap.find("fromUserId");
+                            if (fromUserIdIter != ratingMap.end() && fromUserIdIter->second.is_string())
+                            {
+                                ratingObj["fromUserId"] = QString::fromStdString(fromUserIdIter->second.string_value());
+                            }
+
+                            auto ratingIter = ratingMap.find("rating");
+                            if (ratingIter != ratingMap.end() && ratingIter->second.is_integer())
+                            {
+                                ratingObj["rating"] = static_cast<int>(ratingIter->second.integer_value());
+                            }
+
+                            auto commentIter = ratingMap.find("comment");
+                            if (commentIter != ratingMap.end() && commentIter->second.is_string())
+                            {
+                                ratingObj["comment"] = QString::fromStdString(commentIter->second.string_value());
+                            }
+
+                            auto timestampIter = ratingMap.find("timestamp");
+                            if (timestampIter != ratingMap.end() && timestampIter->second.is_timestamp())
+                            {
+                                // Convert timestamp to readable format if needed
+                                ratingObj["timestamp"] = "Recent";
+                            }
+
+                            ratingsArray.append(ratingObj);
+                        }
+                    }
+                    response["ratings"] = ratingsArray;
+                    qDebug() << "Added" << ratingsArray.size() << "ratings to profile response";
+                }
+                else
+                {
+                    response["ratings"] = QJsonArray(); // Empty ratings array
+                    qDebug() << "No ratings found for profile";
+                }
+
+                qDebug() << "Successfully prepared profile response for identifier:" << identifier;
+            }
+            else
+            {
+                qDebug() << "Profile not found for identifier:" << identifier;
+                response["status"] = "error";
+                response["error"] = "Profile not found";
+            }
+
+            QJsonDocument responseDoc(response);
+            sendResponse(clientSocket, responseDoc.toJson(QJsonDocument::Compact).toStdString());
+        };
+
+        // First try direct UID lookup
+        firebase::firestore::DocumentReference userRef = firestore->Collection("users").Document(lookupId.toStdString());
+
+        auto future = userRef.Get();
+        future.OnCompletion([this, clientSocket, lookupId, processProfile](const firebase::Future<firebase::firestore::DocumentSnapshot> &future)
+                            {
+        if (future.error() != firebase::firestore::kErrorOk)
+        {
+            qDebug() << "Firestore error getting profile for ID:" << lookupId << "Error:" << future.error_message();
+            
+            QJsonObject response;
+            response["status"] = "error";
+            response["error"] = QString::fromStdString(future.error_message());
+            QJsonDocument responseDoc(response);
+            sendResponse(clientSocket, responseDoc.toJson(QJsonDocument::Compact).toStdString());
+            return;
+        }
+        
+        firebase::firestore::DocumentSnapshot snapshot = *future.result();
+        
+        if (snapshot.exists()) {
+            // Found by direct UID lookup
+            processProfile(snapshot, lookupId);
+        } else {
+            // Direct UID lookup failed, try username search
+            qDebug() << "Direct UID lookup failed for:" << lookupId << ", trying username search";
+            
+            // Search by username field
+            auto usernameQuery = firestore->Collection("users")
+                                     .WhereEqualTo("username", firebase::firestore::FieldValue::String(lookupId.toStdString()));
+
+            auto queryFuture = usernameQuery.Get();
+            queryFuture.OnCompletion([this, clientSocket, lookupId, processProfile](const firebase::Future<firebase::firestore::QuerySnapshot> &queryFuture)
+            {
+                if (queryFuture.error() != firebase::firestore::kErrorOk)
+                {
+                    qDebug() << "Firestore error searching by username:" << lookupId << "Error:" << queryFuture.error_message();
+                    QJsonObject response;
+                    response["status"] = "error";
+                    response["error"] = QString::fromStdString(queryFuture.error_message());
+                    QJsonDocument responseDoc(response);
+                    sendResponse(clientSocket, responseDoc.toJson(QJsonDocument::Compact).toStdString());
+                    return;
+                }
+                
+                const firebase::firestore::QuerySnapshot* querySnapshot = queryFuture.result();
+                
+                if (querySnapshot->empty()) {
+                    qDebug() << "No user found with username:" << lookupId;
+                    QJsonObject response;
+                    response["status"] = "error";
+                    response["error"] = "Profile not found";
+                    QJsonDocument responseDoc(response);
+                    sendResponse(clientSocket, responseDoc.toJson(QJsonDocument::Compact).toStdString());
+                    return;
+                }
+                
+                if (querySnapshot->size() > 1) {
+                    qWarning() << "Multiple users found with username:" << lookupId << "Using the first one.";
+                }
+                
+                // Get the first matching document
+                auto documents = querySnapshot->documents();
+                if (!documents.empty()) {
+                    const firebase::firestore::DocumentSnapshot& userDoc = documents[0];
+                    qDebug() << "Found user by username:" << lookupId << "UID:" << QString::fromStdString(userDoc.id());
+                    processProfile(userDoc, lookupId);
+                } else {
+                    qDebug() << "No documents in query result for username:" << lookupId;
+                    QJsonObject response;
+                    response["status"] = "error";
+                    response["error"] = "Profile not found";
+                    QJsonDocument responseDoc(response);
+                    sendResponse(clientSocket, responseDoc.toJson(QJsonDocument::Compact).toStdString());
+                }
+            });
+        } });
     }
     else if (requestType == "signout")
     {
@@ -694,8 +980,25 @@ void Server::processRequest(int clientSocket, const std::string &request)
             QJsonObject educationObj = jsonRequest["education"].toObject();
             firebase::firestore::MapFieldValue education;
 
-            education["jobTitle"] = firebase::firestore::FieldValue::String(
-                educationObj["jobTitle"].toString().toStdString());
+            education["school"] = firebase::firestore::FieldValue::String(
+                educationObj["school"].toString().toStdString());
+
+            // Handle both field name variations
+            if (educationObj.contains("degreeLvl"))
+            {
+                education["degreeLvl"] = firebase::firestore::FieldValue::String(
+                    educationObj["degreeLvl"].toString().toStdString());
+                education["degree_lvl"] = firebase::firestore::FieldValue::String(
+                    educationObj["degreeLvl"].toString().toStdString());
+            }
+            else if (educationObj.contains("degree_lvl"))
+            {
+                education["degree_lvl"] = firebase::firestore::FieldValue::String(
+                    educationObj["degree_lvl"].toString().toStdString());
+                education["degreeLvl"] = firebase::firestore::FieldValue::String(
+                    educationObj["degree_lvl"].toString().toStdString());
+            }
+
             education["startDate"] = firebase::firestore::FieldValue::String(
                 educationObj["startDate"].toString().toStdString());
             education["endDate"] = firebase::firestore::FieldValue::String(
@@ -949,6 +1252,8 @@ void Server::processRequest(int clientSocket, const std::string &request)
             return;
         }
 
+        qDebug() << "Updating proposal status - JobId:" << jobId << "FreelancerId:" << freelancerId << "Status:" << status;
+
         // Reference to the job document
         firebase::firestore::DocumentReference jobRef = firestore->Collection("jobs").Document(jobId.toStdString());
 
@@ -959,18 +1264,22 @@ void Server::processRequest(int clientSocket, const std::string &request)
         QJsonObject response;
         
         if (future.error() != firebase::firestore::kErrorOk) {
+            qDebug() << "Error getting job document:" << future.error_message();
             response["status"] = "error";
             response["error"] = QString::fromStdString(future.error_message());
-            sendResponse(clientSocket, QJsonDocument(response).toJson(QJsonDocument::Compact).toStdString());
+            QJsonDocument responseDoc(response);
+            sendResponse(clientSocket, responseDoc.toJson(QJsonDocument::Compact).toStdString());
             return;
         }
         
         firebase::firestore::DocumentSnapshot snapshot = *future.result();
         
         if (!snapshot.exists()) {
+            qDebug() << "Job document does not exist:" << jobId;
             response["status"] = "error";
             response["error"] = "Job not found";
-            sendResponse(clientSocket, QJsonDocument(response).toJson(QJsonDocument::Compact).toStdString());
+            QJsonDocument responseDoc(response);
+            sendResponse(clientSocket, responseDoc.toJson(QJsonDocument::Compact).toStdString());
             return;
         }
         
@@ -980,9 +1289,11 @@ void Server::processRequest(int clientSocket, const std::string &request)
         // Get proposals array
         auto proposalsField = snapshot.Get("proposals");
         if (!proposalsField.is_array()) {
+            qDebug() << "No proposals array found in job:" << jobId;
             response["status"] = "error";
             response["error"] = "No proposals found for this job";
-            sendResponse(clientSocket, QJsonDocument(response).toJson(QJsonDocument::Compact).toStdString());
+            QJsonDocument responseDoc(response);
+            sendResponse(clientSocket, responseDoc.toJson(QJsonDocument::Compact).toStdString());
             return;
         }
         
@@ -993,29 +1304,43 @@ void Server::processRequest(int clientSocket, const std::string &request)
         for (const auto& proposal : proposalsField.array_value()) {
             if (proposal.is_map()) {
                 auto proposalMap = proposal.map_value();
-                auto idIter = proposalMap.find("freelancerId");
+                auto freelancerIdIter = proposalMap.find("freelancerId");
                 
-                if (idIter != proposalMap.end() && 
-                    idIter->second.is_string() && 
-                    idIter->second.string_value() == freelancerId.toStdString()) {
+                if (freelancerIdIter != proposalMap.end() && 
+                    freelancerIdIter->second.is_string() && 
+                    freelancerIdIter->second.string_value() == freelancerId.toStdString()) {
                     
-                    // Found the matching proposal, update its status
-                    firebase::firestore::MapFieldValue updatedProposal = proposalMap;
-                    updatedProposal["status"] = firebase::firestore::FieldValue::String(status.toStdString());
+                    // Found the proposal to update - create updated proposal
+                    firebase::firestore::MapFieldValue updatedProposal;
+                    
+                    // Copy all existing fields
+                    for (const auto& [key, value] : proposalMap) {
+                        if (key == "status") {
+                            updatedProposal[key] = firebase::firestore::FieldValue::String(status.toStdString());
+                        } else {
+                            updatedProposal[key] = value;
+                        }
+                    }
                     
                     proposals.push_back(firebase::firestore::FieldValue::Map(updatedProposal));
                     foundProposal = true;
+                    qDebug() << "Updated proposal status for freelancer:" << freelancerId << "to:" << status;
                 } else {
-                    // If this proposal isn't being updated, copy it as is
+                    // Keep other proposals unchanged
                     proposals.push_back(proposal);
                 }
+            } else {
+                // Keep non-map entries as is
+                proposals.push_back(proposal);
             }
         }
         
         if (!foundProposal) {
+            qDebug() << "Proposal not found for freelancer:" << freelancerId << "in job:" << jobId;
             response["status"] = "error";
-            response["error"] = "No proposal found for the specified freelancer";
-            sendResponse(clientSocket, QJsonDocument(response).toJson(QJsonDocument::Compact).toStdString());
+            response["error"] = "Proposal not found for this freelancer";
+            QJsonDocument responseDoc(response);
+            sendResponse(clientSocket, responseDoc.toJson(QJsonDocument::Compact).toStdString());
             return;
         }
         
@@ -1025,22 +1350,26 @@ void Server::processRequest(int clientSocket, const std::string &request)
         // If accepting the proposal, also update the approvedFreelancer field
         if (status == "accepted") {
             updateData["approvedFreelancer"] = firebase::firestore::FieldValue::String(freelancerId.toStdString());
+            qDebug() << "Setting approved freelancer to:" << freelancerId;
         }
         
         // Update the job document
         auto updateFuture = firestore->Collection("jobs").Document(jobId.toStdString()).Update(updateData);
-        updateFuture.OnCompletion([this, clientSocket](const firebase::Future<void> &future) {
+        updateFuture.OnCompletion([this, clientSocket, jobId, freelancerId, status](const firebase::Future<void> &future) {
             QJsonObject response;
             
-            if (future.error() != firebase::firestore::kErrorOk) {
+            if (future.error() == firebase::firestore::kErrorOk) {
+                qDebug() << "Successfully updated proposal status for job:" << jobId;
+                response["status"] = "success";
+                response["message"] = QString("Proposal %1 successfully").arg(status);
+            } else {
+                qDebug() << "Error updating proposal status:" << future.error_message();
                 response["status"] = "error";
                 response["error"] = QString::fromStdString(future.error_message());
-            } else {
-                response["status"] = "success";
-                response["message"] = "Proposal status updated successfully";
             }
             
-            sendResponse(clientSocket, QJsonDocument(response).toJson(QJsonDocument::Compact).toStdString());
+            QJsonDocument responseDoc(response);
+            sendResponse(clientSocket, responseDoc.toJson(QJsonDocument::Compact).toStdString());
         }); });
     }
     else if (requestType == "applyForJob")
@@ -1158,6 +1487,7 @@ void Server::processRequest(int clientSocket, const std::string &request)
             sendResponse(clientSocket, QJsonDocument(response).toJson(QJsonDocument::Compact).toStdString());
         }); });
     }
+
     else if (requestType == "getAppliedJobs")
     {
         QString freelancerId = jsonRequest["freelancerId"].toString();
@@ -1205,13 +1535,39 @@ void Server::processRequest(int clientSocket, const std::string &request)
             QJsonObject jobDetails;
             jobDetails["jobId"] = jobId;
 
-            if (auto jt = data.find("JobTitle"); jt != data.end() && jt->second.is_string())
+            // Get job title - check both "JobTitle" and "jobTitle"
+            if (auto jt = data.find("JobTitle"); jt != data.end() && jt->second.is_string()) {
                 jobDetails["jobTitle"] = QString::fromStdString(jt->second.string_value());
+            } else if (auto jt2 = data.find("jobTitle"); jt2 != data.end() && jt2->second.is_string()) {
+                jobDetails["jobTitle"] = QString::fromStdString(jt2->second.string_value());
+            } else {
+                jobDetails["jobTitle"] = "Untitled Job";
+            }
 
-            if (auto jd = data.find("jobDescription"); jd != data.end() && jd->second.is_string())
+            // Get job description
+            if (auto jd = data.find("jobDescription"); jd != data.end() && jd->second.is_string()) {
                 jobDetails["jobDescription"] = QString::fromStdString(jd->second.string_value());
+            } else {
+                jobDetails["jobDescription"] = "No description available";
+            }
 
-            // Get requiredSkills array instead of pay
+            // Get payment from job - FIX: Use "pay" field instead of requiredSkills
+            if (auto payment = data.find("pay"); payment != data.end() && payment->second.is_string()) {
+                jobDetails["payment"] = QString::fromStdString(payment->second.string_value());
+            } else {
+                jobDetails["payment"] = "Payment not specified";
+            }
+
+            // Get employer information - FIX: Get employer name properly
+            if (auto uid = data.find("uid"); uid != data.end() && uid->second.is_string()) {
+                jobDetails["employerId"] = QString::fromStdString(uid->second.string_value());
+                jobDetails["employerName"] = QString::fromStdString(uid->second.string_value()); // Add employerName field
+            } else {
+                jobDetails["employerId"] = "Unknown";
+                jobDetails["employerName"] = "Unknown Employer";
+            }
+
+            // Get required skills array
             if (auto skills = data.find("requiredSkills"); skills != data.end() && skills->second.is_array()) {
                 QJsonArray skillsArray;
                 for (const auto& skill : skills->second.array_value()) {
@@ -1221,34 +1577,51 @@ void Server::processRequest(int clientSocket, const std::string &request)
                 }
                 jobDetails["requiredSkills"] = skillsArray;
             } else {
-                jobDetails["requiredSkills"] = QJsonArray(); // Empty array if no skills
+                jobDetails["requiredSkills"] = QJsonArray();
             }
 
-            if (auto uid = data.find("uid"); uid != data.end() && uid->second.is_string())
-                jobDetails["employerId"] = QString::fromStdString(uid->second.string_value());
-
-            if (auto desc = propMap.find("description"); desc != propMap.end() && desc->second.is_string())
+            // Get proposal details
+            if (auto desc = propMap.find("description"); desc != propMap.end() && desc->second.is_string()) {
                 jobDetails["proposalDescription"] = QString::fromStdString(desc->second.string_value());
+            } else {
+                jobDetails["proposalDescription"] = "No proposal description";
+            }
 
-            // Get budgetRequest from the proposal instead of job payment
+            // Get budgetRequest from the proposal
             if (auto bud = propMap.find("budgetRequest"); bud != propMap.end()) {
-                if (bud->second.is_string())
+                if (bud->second.is_string()) {
                     jobDetails["budgetRequest"] = QString::fromStdString(bud->second.string_value());
-                else if (bud->second.is_integer())
+                } else if (bud->second.is_integer()) {
                     jobDetails["budgetRequest"] = static_cast<qint64>(bud->second.integer_value());
-                else if (bud->second.is_double())
+                } else if (bud->second.is_double()) {
                     jobDetails["budgetRequest"] = bud->second.double_value();
+                }
             } else {
                 jobDetails["budgetRequest"] = "Not specified";
             }
 
+            // Get proposal status
             QString status = "pending";
-            if (auto st = propMap.find("status"); st != propMap.end() && st->second.is_string())
+            if (auto st = propMap.find("status"); st != propMap.end() && st->second.is_string()) {
                 status = QString::fromStdString(st->second.string_value());
+            }
             jobDetails["status"] = status;
 
-            if (auto af = data.find("approvedFreelancer"); af != data.end() && af->second.is_string())
+            // Get approved freelancer info
+            if (auto af = data.find("approvedFreelancer"); af != data.end() && af->second.is_string()) {
                 jobDetails["approvedFreelancer"] = QString::fromStdString(af->second.string_value());
+            } else {
+                jobDetails["approvedFreelancer"] = "";
+            }
+
+            // Get job creation date
+            if (auto dc = data.find("date_created"); dc != data.end() && dc->second.is_timestamp()) {
+                firebase::Timestamp timestamp = dc->second.timestamp_value();
+                time_t seconds = timestamp.seconds();
+                jobDetails["dateCreated"] = QDateTime::fromSecsSinceEpoch(seconds).toString("MMM dd, yyyy");
+            } else {
+                jobDetails["dateCreated"] = "Date not available";
+            }
 
             appliedJobs.append(jobDetails);
             break;  // Done with this job
@@ -1260,26 +1633,27 @@ void Server::processRequest(int clientSocket, const std::string &request)
 
     sendResponse(clientSocket, QJsonDocument(response).toJson(QJsonDocument::Compact).toStdString()); });
     }
+
     else if (requestType == "getApprovedJobs")
-{
-    QString freelancerId = jsonRequest["freelancerId"].toString();
-    QJsonObject response;
-
-    if (freelancerId.isEmpty())
     {
-        QJsonObject err;
-        err["status"] = "error";
-        err["error"] = "getApprovedJobs requires a freelancerId";
-        sendResponse(clientSocket, QJsonDocument(err).toJson(QJsonDocument::Compact).toStdString());
-        return;
-    }
+        QString freelancerId = jsonRequest["freelancerId"].toString();
+        QJsonObject response;
 
-    auto jobsQuery = firestore->Collection("jobs").Get();
+        if (freelancerId.isEmpty())
+        {
+            QJsonObject err;
+            err["status"] = "error";
+            err["error"] = "getApprovedJobs requires a freelancerId";
+            sendResponse(clientSocket, QJsonDocument(err).toJson(QJsonDocument::Compact).toStdString());
+            return;
+        }
 
-    qDebug() << "getApprovedJobs 1" << Qt::endl;
+        auto jobsQuery = firestore->Collection("jobs").Get();
 
-    jobsQuery.OnCompletion([this, clientSocket, freelancerId](const firebase::Future<firebase::firestore::QuerySnapshot> &future)
-                    {
+        qDebug() << "getApprovedJobs 1" << Qt::endl;
+
+        jobsQuery.OnCompletion([this, clientSocket, freelancerId](const firebase::Future<firebase::firestore::QuerySnapshot> &future)
+                               {
     QJsonObject response;
     QJsonArray approvedJobsArray;
     
@@ -1308,16 +1682,39 @@ void Server::processRequest(int clientSocket, const std::string &request)
 
             jobDetails["jobId"] = jobId;
             
-            // Get job details
+            // Get job title - check both "JobTitle" and "jobTitle"
             if (data.find("JobTitle") != data.end() && data["JobTitle"].is_string()) {
                 jobDetails["jobTitle"] = QString::fromStdString(data["JobTitle"].string_value());
+            } else if (data.find("jobTitle") != data.end() && data["jobTitle"].is_string()) {
+                jobDetails["jobTitle"] = QString::fromStdString(data["jobTitle"].string_value());
+            } else {
+                jobDetails["jobTitle"] = "Untitled Job";
             }
             
+            // Get job description
             if (data.find("jobDescription") != data.end() && data["jobDescription"].is_string()) {
                 jobDetails["jobDescription"] = QString::fromStdString(data["jobDescription"].string_value());
+            } else {
+                jobDetails["jobDescription"] = "No description available";
             }
             
-            // Get requiredSkills array instead of pay
+            // Get payment from job - FIX: Use "pay" field
+            if (data.find("pay") != data.end() && data["pay"].is_string()) {
+                jobDetails["payment"] = QString::fromStdString(data["pay"].string_value());
+            } else {
+                jobDetails["payment"] = "Payment not specified";
+            }
+            
+            // Get employer information - FIX: Get employer name properly
+            if (data.find("uid") != data.end() && data["uid"].is_string()) {
+                jobDetails["employerId"] = QString::fromStdString(data["uid"].string_value());
+                jobDetails["employerName"] = QString::fromStdString(data["uid"].string_value()); // Add employerName field
+            } else {
+                jobDetails["employerId"] = "Unknown";
+                jobDetails["employerName"] = "Unknown Employer";
+            }
+            
+            // Get required skills array
             if (data.find("requiredSkills") != data.end() && data["requiredSkills"].is_array()) {
                 QJsonArray skillsArray;
                 for (const auto& skill : data["requiredSkills"].array_value()) {
@@ -1328,10 +1725,6 @@ void Server::processRequest(int clientSocket, const std::string &request)
                 jobDetails["requiredSkills"] = skillsArray;
             } else {
                 jobDetails["requiredSkills"] = QJsonArray(); // Empty array if no skills
-            }
-            
-            if (data.find("uid") != data.end() && data["uid"].is_string()) {
-                jobDetails["employerId"] = QString::fromStdString(data["uid"].string_value());
             }
             
             // Find the budget request from this freelancer's proposal
@@ -1358,13 +1751,35 @@ void Server::processRequest(int clientSocket, const std::string &request)
                             } else {
                                 jobDetails["budgetRequest"] = "Not specified";
                             }
+                            
+                            // Get proposal description
+                            auto descIt = propMap.find("description");
+                            if (descIt != propMap.end() && descIt->second.is_string()) {
+                                jobDetails["proposalDescription"] = QString::fromStdString(descIt->second.string_value());
+                            } else {
+                                jobDetails["proposalDescription"] = "No proposal description";
+                            }
+                            
                             break; // Found the proposal, no need to continue
                         }
                     }
                 }
             } else {
                 jobDetails["budgetRequest"] = "Not specified";
+                jobDetails["proposalDescription"] = "No proposal description";
             }
+            
+            // Get job creation date
+            if (data.find("date_created") != data.end() && data["date_created"].is_timestamp()) {
+                firebase::Timestamp timestamp = data["date_created"].timestamp_value();
+                time_t seconds = timestamp.seconds();
+                jobDetails["dateCreated"] = QDateTime::fromSecsSinceEpoch(seconds).toString("MMM dd, yyyy");
+            } else {
+                jobDetails["dateCreated"] = "Date not available";
+            }
+            
+            // Set status as approved for approved jobs
+            jobDetails["status"] = "accepted";
             
             approvedJobsArray.append(jobDetails);
         }
@@ -1376,7 +1791,7 @@ void Server::processRequest(int clientSocket, const std::string &request)
     qDebug() << "getApprovedJobs" << approvedJobsArray;
     // Set the final response object and send it - just ONCE
     QJsonDocument doc(response);
-    sendResponse(clientSocket, doc.toJson(QJsonDocument::Compact).toStdString());});
+    sendResponse(clientSocket, doc.toJson(QJsonDocument::Compact).toStdString()); });
     }
     else if (requestType == "getProposals")
     {
@@ -1560,6 +1975,7 @@ void Server::processRequest(int clientSocket, const std::string &request)
     {
         QString jobId = jsonRequest["jobId"].toString();
         QString newStatus = jsonRequest["status"].toString(); // "pending", "in-progress", "complete"
+        QString freelancerId = jsonRequest["freelancerId"].toString();
 
         auto jobRef = firestore->Collection("jobs").Document(jobId.toStdString());
 
@@ -1578,7 +1994,114 @@ void Server::processRequest(int clientSocket, const std::string &request)
             QJsonDocument doc(response);
             sendResponse(clientSocket, doc.toJson(QJsonDocument::Compact).toStdString()); });
     }
+    else if (requestType == "completeJob")
+    {
+        QString jobId = jsonRequest["jobId"].toString();
+        QString hiringManagerId = jsonRequest["hiringManagerId"].toString();
+        QString freelancerId = jsonRequest["freelancerId"].toString();
+        QString jobTitle = jsonRequest["jobTitle"].toString();
+        QString jobDescription = jsonRequest["jobDescription"].toString();
+        double budgetRequested = jsonRequest["budgetRequested"].toDouble();
 
+        if (jobId.isEmpty() || hiringManagerId.isEmpty() || freelancerId.isEmpty())
+        {
+            QJsonObject err;
+            err["status"] = "error";
+            err["error"] = "completeJob requires jobId, hiringManagerId, and freelancerId";
+            sendResponse(clientSocket, QJsonDocument(err).toJson(QJsonDocument::Compact).toStdString());
+            return;
+        }
+
+        qDebug() << "Completing job:" << jobId << "for HM:" << hiringManagerId << "and Freelancer:" << freelancerId;
+
+        // First, get the job details before deleting it
+        firebase::firestore::DocumentReference jobRef = firestore->Collection("jobs").Document(jobId.toStdString());
+
+        auto getJobFuture = jobRef.Get();
+        getJobFuture.OnCompletion([this, clientSocket, jobId, hiringManagerId, freelancerId, jobTitle, jobDescription, budgetRequested](const firebase::Future<firebase::firestore::DocumentSnapshot> &future)
+                                  {
+        
+        if (future.error() != firebase::firestore::kErrorOk) {
+            QJsonObject response;
+            response["status"] = "error";
+            response["error"] = QString::fromStdString(future.error_message());
+            sendResponse(clientSocket, QJsonDocument(response).toJson(QJsonDocument::Compact).toStdString());
+            return;
+        }
+
+        firebase::firestore::DocumentSnapshot snapshot = *future.result();
+        
+        if (!snapshot.exists()) {
+            QJsonObject response;
+            response["status"] = "error";
+            response["error"] = "Job not found";
+            sendResponse(clientSocket, QJsonDocument(response).toJson(QJsonDocument::Compact).toStdString());
+            return;
+        }
+
+        // Create the completed job entry
+        firebase::firestore::MapFieldValue completedJobEntry;
+        completedJobEntry["jobId"] = firebase::firestore::FieldValue::String(jobId.toStdString());
+        completedJobEntry["hiringManagerId"] = firebase::firestore::FieldValue::String(hiringManagerId.toStdString());
+        completedJobEntry["freelancerId"] = firebase::firestore::FieldValue::String(freelancerId.toStdString());
+        completedJobEntry["jobTitle"] = firebase::firestore::FieldValue::String(jobTitle.toStdString());
+        completedJobEntry["jobDescription"] = firebase::firestore::FieldValue::String(jobDescription.toStdString());
+        completedJobEntry["budgetRequested"] = firebase::firestore::FieldValue::Double(budgetRequested);
+        completedJobEntry["completedAt"] = firebase::firestore::FieldValue::Timestamp(firebase::Timestamp::Now());
+
+        // Counter for completed operations
+        auto completionCounter = std::make_shared<int>(0);
+        auto totalOperations = 3; // 2 user updates + 1 job deletion
+        auto hasError = std::make_shared<bool>(false);
+        auto errorMessage = std::make_shared<QString>();
+
+        auto checkCompletion = [this, clientSocket, completionCounter, totalOperations, hasError, errorMessage]() {
+            (*completionCounter)++;
+            if (*completionCounter >= totalOperations) {
+                QJsonObject response;
+                if (*hasError) {
+                    response["status"] = "error";
+                    response["error"] = *errorMessage;
+                } else {
+                    response["status"] = "success";
+                    response["message"] = "Job completed successfully";
+                }
+                sendResponse(clientSocket, QJsonDocument(response).toJson(QJsonDocument::Compact).toStdString());
+            }
+        };
+
+        // Add to hiring manager's completed jobs
+        firebase::firestore::DocumentReference hmRef = firestore->Collection("users").Document(hiringManagerId.toStdString());
+        hmRef.Update({{"completedJobs", firebase::firestore::FieldValue::ArrayUnion({firebase::firestore::FieldValue::Map(completedJobEntry)})}})
+        .OnCompletion([checkCompletion, hasError, errorMessage](const firebase::Future<void> &future) {
+            if (future.error() != firebase::firestore::kErrorOk) {
+                *hasError = true;
+                *errorMessage = QString("Failed to update hiring manager's completed jobs: ") + QString::fromStdString(future.error_message());
+            }
+            checkCompletion();
+        });
+
+        // Add to freelancer's completed jobs
+        firebase::firestore::DocumentReference freelancerRef = firestore->Collection("users").Document(freelancerId.toStdString());
+        freelancerRef.Update({{"completedJobs", firebase::firestore::FieldValue::ArrayUnion({firebase::firestore::FieldValue::Map(completedJobEntry)})}})
+        .OnCompletion([checkCompletion, hasError, errorMessage](const firebase::Future<void> &future) {
+            if (future.error() != firebase::firestore::kErrorOk) {
+                *hasError = true;
+                *errorMessage = QString("Failed to update freelancer's completed jobs: ") + QString::fromStdString(future.error_message());
+            }
+            checkCompletion();
+        });
+
+        // Delete the job from jobs collection
+        firebase::firestore::DocumentReference jobRef = firestore->Collection("jobs").Document(jobId.toStdString());
+        jobRef.Delete().OnCompletion([checkCompletion, hasError, errorMessage](const firebase::Future<void> &future) {
+            if (future.error() != firebase::firestore::kErrorOk) {
+                *hasError = true;
+                *errorMessage = QString("Failed to delete job from active jobs: ") + QString::fromStdString(future.error_message());
+            }
+            checkCompletion();
+        }); });
+    }
     else if (requestType == "updateCompletedJobs")
     {
         QString userId = jsonRequest["userId"].toString();
@@ -1663,6 +2186,7 @@ void Server::processRequest(int clientSocket, const std::string &request)
             }
 
             QJsonDocument doc(response);
+            qDebug() << "getCompletedJobs:" << " " << doc << Qt::endl;
             sendResponse(clientSocket, doc.toJson(QJsonDocument::Compact).toStdString()); });
     }
     else if (requestType == "rateUser")
@@ -1674,32 +2198,96 @@ void Server::processRequest(int clientSocket, const std::string &request)
 
         auto targetRef = firestore->Collection("users").Document(colleague.toStdString());
 
-        firebase::firestore::MapFieldValue ratingEntry = {
+        // First, get the current user document to check for existing ratings
+        targetRef.Get().OnCompletion([this, clientSocket, fromUser, colleague, rating, comment](const firebase::Future<firebase::firestore::DocumentSnapshot> &future)
+                                     {
+        QJsonObject response;
+        
+        if (future.error() != firebase::firestore::kErrorOk) {
+            response["status"] = "error";
+            response["error"] = QString::fromStdString(future.error_message());
+            QJsonDocument doc(response);
+            sendResponse(clientSocket, doc.toJson(QJsonDocument::Compact).toStdString());
+            return;
+        }
+
+        firebase::firestore::DocumentSnapshot snapshot = *future.result();
+        
+        if (!snapshot.exists()) {
+            response["status"] = "error";
+            response["error"] = "User not found";
+            QJsonDocument doc(response);
+            sendResponse(clientSocket, doc.toJson(QJsonDocument::Compact).toStdString());
+            return;
+        }
+
+        // Create a new reference inside the callback to avoid const issues
+        auto updateRef = firestore->Collection("users").Document(colleague.toStdString());
+
+        // Create the new rating entry
+        firebase::firestore::MapFieldValue newRatingEntry = {
             {"fromUserId", firebase::firestore::FieldValue::String(fromUser.toStdString())},
             {"rating", firebase::firestore::FieldValue::Integer(rating)},
             {"comment", firebase::firestore::FieldValue::String(comment.toStdString())},
-            {"timestamp", firebase::firestore::FieldValue::Timestamp(firebase::Timestamp::Now())}};
+            {"timestamp", firebase::firestore::FieldValue::Timestamp(firebase::Timestamp::Now())}
+        };
 
-        targetRef.Update({{"ratings", firebase::firestore::FieldValue::ArrayUnion({firebase::firestore::FieldValue::Map(ratingEntry)})}}).OnCompletion([=](const firebase::Future<void> &f)
-                                                                                                                                                       {
+        // Get existing ratings array
+        auto ratingsField = snapshot.Get("ratings");
+        std::vector<firebase::firestore::FieldValue> updatedRatings;
+        bool foundExistingRating = false;
+
+        if (ratingsField.is_array()) {
+            // Check each existing rating
+            for (const auto& ratingValue : ratingsField.array_value()) {
+                if (ratingValue.is_map()) {
+                    auto ratingMap = ratingValue.map_value();
+                    auto fromUserIdIter = ratingMap.find("fromUserId");
+                    
+                    // Check if this rating is from the same user
+                    if (fromUserIdIter != ratingMap.end() && 
+                        fromUserIdIter->second.is_string() && 
+                        fromUserIdIter->second.string_value() == fromUser.toStdString()) {
+                        
+                        // Found existing rating from this user, replace it with the new one
+                        updatedRatings.push_back(firebase::firestore::FieldValue::Map(newRatingEntry));
+                        foundExistingRating = true;
+                        qDebug() << "Updated existing rating from user:" << fromUser;
+                    } else {
+                        // Keep existing rating from other users
+                        updatedRatings.push_back(ratingValue);
+                    }
+                } else {
+                    // Keep non-map entries as is (shouldn't happen, but for safety)
+                    updatedRatings.push_back(ratingValue);
+                }
+            }
+        }
+
+        // If no existing rating was found, add the new one
+        if (!foundExistingRating) {
+            updatedRatings.push_back(firebase::firestore::FieldValue::Map(newRatingEntry));
+            qDebug() << "Added new rating from user:" << fromUser;
+        }
+
+        // Update the document with the modified ratings array
+        firebase::firestore::MapFieldValue updateData = {
+            {"ratings", firebase::firestore::FieldValue::Array(updatedRatings)}
+        };
+
+        updateRef.Update(updateData).OnCompletion([this, clientSocket, foundExistingRating](const firebase::Future<void> &updateFuture)
+        {
             QJsonObject response;
-            if (f.error() == firebase::firestore::kErrorOk) {
+            if (updateFuture.error() == firebase::firestore::kErrorOk) {
                 response["status"] = "success";
+                response["message"] = foundExistingRating ? "Rating updated successfully" : "Rating added successfully";
             } else {
                 response["status"] = "error";
-                response["error"] = f.error_message();
+                response["error"] = QString::fromStdString(updateFuture.error_message());
             }
             QJsonDocument doc(response);
-            sendResponse(clientSocket, doc.toJson(QJsonDocument::Compact).toStdString()); });
-    }
-    else
-    {
-        QJsonObject response;
-        response["status"] = "error";
-        response["error"] = "Unknown request type: " + requestType;
-
-        QJsonDocument responseDoc(response);
-        sendResponse(clientSocket, responseDoc.toJson(QJsonDocument::Compact).toStdString());
+            sendResponse(clientSocket, doc.toJson(QJsonDocument::Compact).toStdString());
+        }); });
     }
 }
 void Server::sendResponse(int clientSocket, const std::string &response)
@@ -1776,4 +2364,60 @@ void Server::fetchFreelancerDetails(const std::string &freelancerId, std::functi
         freelancerData["skills"] = skillsArray;
         
         callback(freelancerData, true); });
+}
+
+// Add this method to server.cpp:
+void Server::searchByUsername(int clientSocket, const QString &username,
+                              std::function<void(const firebase::firestore::DocumentSnapshot &, const QString &)> processProfile)
+{
+    qDebug() << "Searching for user by username:" << username;
+
+    // Query the users collection for documents where username field matches
+    auto usernameQuery = firestore->Collection("users")
+                             .WhereEqualTo("username", firebase::firestore::FieldValue::String(username.toStdString()));
+
+    auto future = usernameQuery.Get();
+    future.OnCompletion([this, clientSocket, username, processProfile](const firebase::Future<firebase::firestore::QuerySnapshot> &future)
+                        {
+        if (future.error() != firebase::firestore::kErrorOk)
+        {
+            qDebug() << "Firestore error searching by username:" << username << "Error:" << future.error_message();
+            QJsonObject response;
+            response["status"] = "error";
+            response["error"] = QString::fromStdString(future.error_message());
+            QJsonDocument responseDoc(response);
+            sendResponse(clientSocket, responseDoc.toJson(QJsonDocument::Compact).toStdString());
+            return;
+        }
+        
+        const firebase::firestore::QuerySnapshot* snapshot = future.result();
+        
+        if (snapshot->empty()) {
+            qDebug() << "No user found with username:" << username;
+            QJsonObject response;
+            response["status"] = "error";
+            response["error"] = "Profile not found";
+            QJsonDocument responseDoc(response);
+            sendResponse(clientSocket, responseDoc.toJson(QJsonDocument::Compact).toStdString());
+            return;
+        }
+        
+        if (snapshot->size() > 1) {
+            qWarning() << "Multiple users found with username:" << username << "Using the first one.";
+        }
+        
+        // Get the first matching document
+        auto documents = snapshot->documents();
+        if (!documents.empty()) {
+            const firebase::firestore::DocumentSnapshot& userDoc = documents[0];
+            qDebug() << "Found user by username:" << username << "UID:" << QString::fromStdString(userDoc.id());
+            processProfile(userDoc, username);
+        } else {
+            qDebug() << "No documents in query result for username:" << username;
+            QJsonObject response;
+            response["status"] = "error";
+            response["error"] = "Profile not found";
+            QJsonDocument responseDoc(response);
+            sendResponse(clientSocket, responseDoc.toJson(QJsonDocument::Compact).toStdString());
+        } });
 }

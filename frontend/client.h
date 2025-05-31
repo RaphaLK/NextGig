@@ -84,7 +84,7 @@ public:
                                       const QString &freelancerId,
                                       bool accept,
                                       std::function<void(bool)> callback);
-    void updateJobStatus(const QString &jobId,
+    void updateJobStatus(const QString &jobId, const QString &freelancerId,
                                     const QString &newStatus,
                                     std::function<void(bool)> callback);
     void updateCompletedJobs(const QString &userId,
@@ -103,6 +103,14 @@ public:
                                 int rating,
                                 const QString &comment,
                                 std::function<void(bool)> callback);
+
+    void completeJob(const QString &jobId,
+                const QString &hiringManagerId, 
+                const QString &freelancerId,
+                const QString &jobTitle,
+                const QString &jobDescription,
+                double budgetRequested,
+                std::function<void(bool)> callback);
 signals:
     void connectionError(const QString &errorMessage);
     void serverResponseReceived(const QJsonObject &response);

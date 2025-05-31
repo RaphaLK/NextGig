@@ -74,9 +74,8 @@ void JobFeed::setupUI()
     jobsList = new QListWidget();
     jobsList->setStyleSheet(
         "QListWidget::item { padding: 10px; border-bottom: 1px solid #e0e0e0; }"
-        "QListWidget::item:selected { background-color: #e3f2fd; }"
-        "QListWidget::item:hover { background-color: #f5f5f5; }"
-    );
+        "QListWidget::item:selected { background-color:rgb(116, 121, 124); }"
+        "QListWidget::item:hover { background-color:rgb(116, 121, 124); }");
     connect(jobsList, &QListWidget::currentItemChanged, this, &JobFeed::onJobSelected);
     
     leftLayout->addWidget(jobsList);
@@ -477,8 +476,8 @@ void JobFeed::onApplyClicked()
     
     // Create proposal
     Proposal proposal(
-        freelancer->getUid(),
         proposalText.toStdString(),
+        freelancer->getUid(),
         budgetRequest.toStdString()
     );
     

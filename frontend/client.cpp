@@ -80,8 +80,8 @@ void BackendClient::processNextRequest()
     disconnect(this, &BackendClient::serverResponseReceived, nullptr, nullptr);
 
     // Create a single-shot connection using QTimer
-    connect(this, &BackendClient::serverResponseReceived, this,
-        [this, callback = currentRequest.callback](const QJsonObject &response) {
+    connect(this, &BackendClient::serverResponseReceived, this, [this, callback = currentRequest.callback](const QJsonObject &response)
+            {
             // Immediately disconnect to prevent reuse
             disconnect(this, &BackendClient::serverResponseReceived, nullptr, nullptr);
             
@@ -89,8 +89,7 @@ void BackendClient::processNextRequest()
             callback(response);
             
             // Process next request
-            QTimer::singleShot(0, this, &BackendClient::processNextRequest);
-        }, Qt::QueuedConnection);
+            QTimer::singleShot(0, this, &BackendClient::processNextRequest); }, Qt::QueuedConnection);
 
     // Convert request to JSON
     QJsonDocument doc(currentRequest.request);
@@ -270,7 +269,16 @@ void BackendClient::signIn(const QString &email, const QString &password,
                     QJsonObject eduObj = response["education"].toObject();
                     User::education edu;
                     edu.school = eduObj["school"].toString().toStdString();
-                    edu.degreeLvl = eduObj["degree_lvl"].toString().toStdString();
+                    
+                    // Try both field name variations - this fixes the field mapping issue
+                    if (eduObj.contains("degreeLvl")) {
+                        edu.degreeLvl = eduObj["degreeLvl"].toString().toStdString();
+                    } else if (eduObj.contains("degree_lvl")) {
+                        edu.degreeLvl = eduObj["degree_lvl"].toString().toStdString();
+                    } else {
+                        edu.degreeLvl = "";
+                    }
+                    
                     freelancer->setEducation(edu);
                 }
                 
@@ -506,7 +514,11 @@ void BackendClient::updateFreelancerProfile(Freelancer *freelancer, std::functio
     QJsonObject educationObj;
     User::education edu = freelancer->getEducation();
     educationObj["school"] = QString::fromStdString(edu.school);
-    educationObj["degree_lvl"] = QString::fromStdString(edu.degreeLvl);
+    educationObj["degreeLvl"] = QString::fromStdString(edu.degreeLvl);  // Use consistent field name
+    educationObj["degree_lvl"] = QString::fromStdString(edu.degreeLvl); // Keep for compatibility
+    educationObj["startDate"] = "";                                     // Add if you have these fields in your User::education struct
+    educationObj["endDate"] = "";
+    educationObj["description"] = "";
     request["education"] = educationObj;
 
     // Add accomplishments
@@ -900,6 +912,7 @@ void BackendClient::respondToProposal(const QString &jobId,
 
 void BackendClient::updateJobStatus(const QString &jobId,
                                     const QString &newStatus,
+                                    const QString &freelancerId,
                                     std::function<void(bool)> callback)
 {
     QJsonObject request;
@@ -999,4 +1012,27 @@ void BackendClient::rateUser(const QString &fromUserId,
                 {
         bool ok = (resp["status"].toString() == "success");
         callback(ok); });
+}
+
+void BackendClient::completeJob(const QString &jobId,
+                                const QString &hiringManagerId,
+                                const QString &freelancerId,
+                                const QString &jobTitle,
+                                const QString &jobDescription,
+                                double budgetRequested,
+                                std::function<void(bool)> callback)
+{
+    QJsonObject request;
+    request["type"] = "completeJob";
+    request["jobId"] = jobId;
+    request["hiringManagerId"] = hiringManagerId;
+    request["freelancerId"] = freelancerId;
+    request["jobTitle"] = jobTitle;
+    request["jobDescription"] = jobDescription;
+    request["budgetRequested"] = budgetRequested;
+
+    sendRequest(request, [callback](const QJsonObject &response)
+                {
+        bool success = (response["status"].toString() == "success");
+        callback(success); });
 }
