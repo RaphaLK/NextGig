@@ -678,54 +678,134 @@ void FreelancerPortal::onAppliedJobSelected(QListWidgetItem *current, QListWidge
 {
     Q_UNUSED(previous)
     
-    if (!current || current->data(Qt::UserRole).isNull()) {
-        clearJobDetails();
-        clearHiringManagerDetails();
+    if (!current) {
+        hasSelectedAppliedJob = false;
         return;
     }
     
-    QJsonObject jobObj = current->data(Qt::UserRole).toJsonObject();
-    updateJobDetails(jobObj);
-
-    qDebug() << Qt::endl << jobObj << Qt::endl;
-    
-    // Get the employer ID - try different field names its either username or user ID
-    QString employerId = jobObj["employerId"].toString();
-    if (employerId.isEmpty()) {
-        employerId = jobObj["uid"].toString();
-    }
-    if (employerId.isEmpty()) {
-        employerId = jobObj["employerUid"].toString();
+    // Get job data from item
+    QVariant jobData = current->data(Qt::UserRole);
+    if (!jobData.isValid()) {
+        hasSelectedAppliedJob = false;
+        return;
     }
     
-    qDebug() << "Loading hiring manager info for employerId:" << employerId;
-    loadHiringManagerInfo(employerId);
+    currentSelectedAppliedJob = jobData.toJsonObject();
+    hasSelectedAppliedJob = true;
+    
+    // Update job info panel with applied job details - FIX: Use correct variable names
+    if (jobInfoTitleLabel && jobInfoDescriptionLabel && jobInfoPaymentLabel && jobInfoSkillsLabel) {
+        jobInfoTitleLabel->setText(currentSelectedAppliedJob["jobTitle"].toString());
+        jobInfoDescriptionLabel->setText(currentSelectedAppliedJob["jobDescription"].toString());
+        
+        // Show employer information
+        jobInfoEmployerLabel->setText("Employer: " + currentSelectedAppliedJob["employerName"].toString());
+        
+        // FIX: Show payment from the job, not budget request
+        QString payment = currentSelectedAppliedJob["payment"].toString();
+        if (payment.isEmpty() || payment == "Payment not specified") {
+            // Fallback to budget request if payment is not available
+            QString budgetRequest = currentSelectedAppliedJob["budgetRequest"].toString();
+            jobInfoPaymentLabel->setText(QString("Your Bid: %1").arg(budgetRequest));
+        } else {
+            jobInfoPaymentLabel->setText(QString("Job Payment: %1").arg(payment));
+        }
+        
+        // Show required skills
+        QJsonArray skillsArray = currentSelectedAppliedJob["requiredSkills"].toArray();
+        QStringList skillsList;
+        for (const auto &skill : skillsArray) {
+            skillsList << skill.toString();
+        }
+        jobInfoSkillsLabel->setText(skillsList.isEmpty() ? "No specific skills required" : skillsList.join(" • "));
+        
+        // Show date if available
+        if (jobInfoDateLabel) {
+            jobInfoDateLabel->setText("Posted: " + currentSelectedAppliedJob["dateCreated"].toString());
+        }
+        
+        // Show status
+        QString status = currentSelectedAppliedJob["status"].toString();
+        QString statusText = QString("Status: %1").arg(status.toUpper());
+        if (status == "accepted") {
+            statusText += " ✓";
+        } else if (status == "rejected") {
+            statusText += " ✗";
+        } else {
+            statusText += " ⏳";
+        }
+        qDebug() << "Applied job status:" << statusText;
+    }
+    
+    // Update hiring manager info panel
+    QString employerId = currentSelectedAppliedJob["employerId"].toString();
+    if (!employerId.isEmpty() && employerId != "Unknown") {
+        loadHiringManagerInfo(employerId);
+    } else {
+        // Clear hiring manager info if employer is unknown
+        clearHiringManagerDetails();
+    }
 }
 
 void FreelancerPortal::onApprovedJobSelected(QListWidgetItem *current, QListWidgetItem *previous)
 {
     Q_UNUSED(previous)
     
-    if (!current || current->data(Qt::UserRole).isNull()) {
-        clearJobDetails();
-        clearHiringManagerDetails();
+    if (!current) {
+        hasSelectedApprovedJob = false;
         return;
     }
     
-    QJsonObject jobObj = current->data(Qt::UserRole).toJsonObject();
-    updateJobDetails(jobObj);
-    
-    // Get the employer ID - try different field names
-    QString employerId = jobObj["employerId"].toString();
-    if (employerId.isEmpty()) {
-        employerId = jobObj["uid"].toString();
-    }
-    if (employerId.isEmpty()) {
-        employerId = jobObj["employerUid"].toString();
+    // Get job data from item
+    QVariant jobData = current->data(Qt::UserRole);
+    if (!jobData.isValid()) {
+        hasSelectedApprovedJob = false;
+        return;
     }
     
-    qDebug() << "Loading hiring manager info for employerId:" << employerId;
-    loadHiringManagerInfo(employerId);
+    currentSelectedApprovedJob = jobData.toJsonObject();
+    hasSelectedApprovedJob = true;
+    
+    // Update job info panel with approved job details - FIX: Use correct variable names
+    if (jobInfoTitleLabel && jobInfoDescriptionLabel && jobInfoPaymentLabel && jobInfoSkillsLabel) {
+        jobInfoTitleLabel->setText(currentSelectedApprovedJob["jobTitle"].toString());
+        jobInfoDescriptionLabel->setText(currentSelectedApprovedJob["jobDescription"].toString());
+        
+        // Show employer information
+        jobInfoEmployerLabel->setText("Employer: " + currentSelectedApprovedJob["employerName"].toString());
+        
+        // FIX: Show payment from the job, not just budget request
+        QString payment = currentSelectedApprovedJob["payment"].toString();
+        QString budgetRequest = currentSelectedApprovedJob["budgetRequest"].toString();
+        
+        if (!payment.isEmpty() && payment != "Payment not specified") {
+            jobInfoPaymentLabel->setText(QString("Job Payment: %1 (Your Bid: %2)").arg(payment, budgetRequest));
+        } else {
+            jobInfoPaymentLabel->setText(QString("Your Accepted Bid: %1").arg(budgetRequest));
+        }
+        
+        // Show required skills
+        QJsonArray skillsArray = currentSelectedApprovedJob["requiredSkills"].toArray();
+        QStringList skillsList;
+        for (const auto &skill : skillsArray) {
+            skillsList << skill.toString();
+        }
+        jobInfoSkillsLabel->setText(skillsList.isEmpty() ? "No specific skills required" : skillsList.join(" • "));
+        
+        // Show date if available
+        if (jobInfoDateLabel) {
+            jobInfoDateLabel->setText("Posted: " + currentSelectedApprovedJob["dateCreated"].toString());
+        }
+    }
+    
+    // Update hiring manager info panel
+    QString employerId = currentSelectedApprovedJob["employerId"].toString();
+    if (!employerId.isEmpty() && employerId != "Unknown") {
+        loadHiringManagerInfo(employerId);
+    } else {
+        // Clear hiring manager info if employer is unknown
+        clearHiringManagerDetails();
+    }
 }
 
 void FreelancerPortal::loadHiringManagerInfo(const QString &employerId)

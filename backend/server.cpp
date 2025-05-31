@@ -1487,6 +1487,7 @@ void Server::processRequest(int clientSocket, const std::string &request)
             sendResponse(clientSocket, QJsonDocument(response).toJson(QJsonDocument::Compact).toStdString());
         }); });
     }
+
     else if (requestType == "getAppliedJobs")
     {
         QString freelancerId = jsonRequest["freelancerId"].toString();
@@ -1534,13 +1535,39 @@ void Server::processRequest(int clientSocket, const std::string &request)
             QJsonObject jobDetails;
             jobDetails["jobId"] = jobId;
 
-            if (auto jt = data.find("JobTitle"); jt != data.end() && jt->second.is_string())
+            // Get job title - check both "JobTitle" and "jobTitle"
+            if (auto jt = data.find("JobTitle"); jt != data.end() && jt->second.is_string()) {
                 jobDetails["jobTitle"] = QString::fromStdString(jt->second.string_value());
+            } else if (auto jt2 = data.find("jobTitle"); jt2 != data.end() && jt2->second.is_string()) {
+                jobDetails["jobTitle"] = QString::fromStdString(jt2->second.string_value());
+            } else {
+                jobDetails["jobTitle"] = "Untitled Job";
+            }
 
-            if (auto jd = data.find("jobDescription"); jd != data.end() && jd->second.is_string())
+            // Get job description
+            if (auto jd = data.find("jobDescription"); jd != data.end() && jd->second.is_string()) {
                 jobDetails["jobDescription"] = QString::fromStdString(jd->second.string_value());
+            } else {
+                jobDetails["jobDescription"] = "No description available";
+            }
 
-            // Get requiredSkills array instead of pay
+            // Get payment from job - FIX: Use "pay" field instead of requiredSkills
+            if (auto payment = data.find("pay"); payment != data.end() && payment->second.is_string()) {
+                jobDetails["payment"] = QString::fromStdString(payment->second.string_value());
+            } else {
+                jobDetails["payment"] = "Payment not specified";
+            }
+
+            // Get employer information - FIX: Get employer name properly
+            if (auto uid = data.find("uid"); uid != data.end() && uid->second.is_string()) {
+                jobDetails["employerId"] = QString::fromStdString(uid->second.string_value());
+                jobDetails["employerName"] = QString::fromStdString(uid->second.string_value()); // Add employerName field
+            } else {
+                jobDetails["employerId"] = "Unknown";
+                jobDetails["employerName"] = "Unknown Employer";
+            }
+
+            // Get required skills array
             if (auto skills = data.find("requiredSkills"); skills != data.end() && skills->second.is_array()) {
                 QJsonArray skillsArray;
                 for (const auto& skill : skills->second.array_value()) {
@@ -1550,34 +1577,51 @@ void Server::processRequest(int clientSocket, const std::string &request)
                 }
                 jobDetails["requiredSkills"] = skillsArray;
             } else {
-                jobDetails["requiredSkills"] = QJsonArray(); // Empty array if no skills
+                jobDetails["requiredSkills"] = QJsonArray();
             }
 
-            if (auto uid = data.find("uid"); uid != data.end() && uid->second.is_string())
-                jobDetails["employerId"] = QString::fromStdString(uid->second.string_value());
-
-            if (auto desc = propMap.find("description"); desc != propMap.end() && desc->second.is_string())
+            // Get proposal details
+            if (auto desc = propMap.find("description"); desc != propMap.end() && desc->second.is_string()) {
                 jobDetails["proposalDescription"] = QString::fromStdString(desc->second.string_value());
+            } else {
+                jobDetails["proposalDescription"] = "No proposal description";
+            }
 
-            // Get budgetRequest from the proposal instead of job payment
+            // Get budgetRequest from the proposal
             if (auto bud = propMap.find("budgetRequest"); bud != propMap.end()) {
-                if (bud->second.is_string())
+                if (bud->second.is_string()) {
                     jobDetails["budgetRequest"] = QString::fromStdString(bud->second.string_value());
-                else if (bud->second.is_integer())
+                } else if (bud->second.is_integer()) {
                     jobDetails["budgetRequest"] = static_cast<qint64>(bud->second.integer_value());
-                else if (bud->second.is_double())
+                } else if (bud->second.is_double()) {
                     jobDetails["budgetRequest"] = bud->second.double_value();
+                }
             } else {
                 jobDetails["budgetRequest"] = "Not specified";
             }
 
+            // Get proposal status
             QString status = "pending";
-            if (auto st = propMap.find("status"); st != propMap.end() && st->second.is_string())
+            if (auto st = propMap.find("status"); st != propMap.end() && st->second.is_string()) {
                 status = QString::fromStdString(st->second.string_value());
+            }
             jobDetails["status"] = status;
 
-            if (auto af = data.find("approvedFreelancer"); af != data.end() && af->second.is_string())
+            // Get approved freelancer info
+            if (auto af = data.find("approvedFreelancer"); af != data.end() && af->second.is_string()) {
                 jobDetails["approvedFreelancer"] = QString::fromStdString(af->second.string_value());
+            } else {
+                jobDetails["approvedFreelancer"] = "";
+            }
+
+            // Get job creation date
+            if (auto dc = data.find("date_created"); dc != data.end() && dc->second.is_timestamp()) {
+                firebase::Timestamp timestamp = dc->second.timestamp_value();
+                time_t seconds = timestamp.seconds();
+                jobDetails["dateCreated"] = QDateTime::fromSecsSinceEpoch(seconds).toString("MMM dd, yyyy");
+            } else {
+                jobDetails["dateCreated"] = "Date not available";
+            }
 
             appliedJobs.append(jobDetails);
             break;  // Done with this job
@@ -1589,6 +1633,7 @@ void Server::processRequest(int clientSocket, const std::string &request)
 
     sendResponse(clientSocket, QJsonDocument(response).toJson(QJsonDocument::Compact).toStdString()); });
     }
+
     else if (requestType == "getApprovedJobs")
     {
         QString freelancerId = jsonRequest["freelancerId"].toString();
@@ -1637,16 +1682,39 @@ void Server::processRequest(int clientSocket, const std::string &request)
 
             jobDetails["jobId"] = jobId;
             
-            // Get job details
+            // Get job title - check both "JobTitle" and "jobTitle"
             if (data.find("JobTitle") != data.end() && data["JobTitle"].is_string()) {
                 jobDetails["jobTitle"] = QString::fromStdString(data["JobTitle"].string_value());
+            } else if (data.find("jobTitle") != data.end() && data["jobTitle"].is_string()) {
+                jobDetails["jobTitle"] = QString::fromStdString(data["jobTitle"].string_value());
+            } else {
+                jobDetails["jobTitle"] = "Untitled Job";
             }
             
+            // Get job description
             if (data.find("jobDescription") != data.end() && data["jobDescription"].is_string()) {
                 jobDetails["jobDescription"] = QString::fromStdString(data["jobDescription"].string_value());
+            } else {
+                jobDetails["jobDescription"] = "No description available";
             }
             
-            // Get requiredSkills array instead of pay
+            // Get payment from job - FIX: Use "pay" field
+            if (data.find("pay") != data.end() && data["pay"].is_string()) {
+                jobDetails["payment"] = QString::fromStdString(data["pay"].string_value());
+            } else {
+                jobDetails["payment"] = "Payment not specified";
+            }
+            
+            // Get employer information - FIX: Get employer name properly
+            if (data.find("uid") != data.end() && data["uid"].is_string()) {
+                jobDetails["employerId"] = QString::fromStdString(data["uid"].string_value());
+                jobDetails["employerName"] = QString::fromStdString(data["uid"].string_value()); // Add employerName field
+            } else {
+                jobDetails["employerId"] = "Unknown";
+                jobDetails["employerName"] = "Unknown Employer";
+            }
+            
+            // Get required skills array
             if (data.find("requiredSkills") != data.end() && data["requiredSkills"].is_array()) {
                 QJsonArray skillsArray;
                 for (const auto& skill : data["requiredSkills"].array_value()) {
@@ -1657,10 +1725,6 @@ void Server::processRequest(int clientSocket, const std::string &request)
                 jobDetails["requiredSkills"] = skillsArray;
             } else {
                 jobDetails["requiredSkills"] = QJsonArray(); // Empty array if no skills
-            }
-            
-            if (data.find("uid") != data.end() && data["uid"].is_string()) {
-                jobDetails["employerId"] = QString::fromStdString(data["uid"].string_value());
             }
             
             // Find the budget request from this freelancer's proposal
@@ -1687,13 +1751,35 @@ void Server::processRequest(int clientSocket, const std::string &request)
                             } else {
                                 jobDetails["budgetRequest"] = "Not specified";
                             }
+                            
+                            // Get proposal description
+                            auto descIt = propMap.find("description");
+                            if (descIt != propMap.end() && descIt->second.is_string()) {
+                                jobDetails["proposalDescription"] = QString::fromStdString(descIt->second.string_value());
+                            } else {
+                                jobDetails["proposalDescription"] = "No proposal description";
+                            }
+                            
                             break; // Found the proposal, no need to continue
                         }
                     }
                 }
             } else {
                 jobDetails["budgetRequest"] = "Not specified";
+                jobDetails["proposalDescription"] = "No proposal description";
             }
+            
+            // Get job creation date
+            if (data.find("date_created") != data.end() && data["date_created"].is_timestamp()) {
+                firebase::Timestamp timestamp = data["date_created"].timestamp_value();
+                time_t seconds = timestamp.seconds();
+                jobDetails["dateCreated"] = QDateTime::fromSecsSinceEpoch(seconds).toString("MMM dd, yyyy");
+            } else {
+                jobDetails["dateCreated"] = "Date not available";
+            }
+            
+            // Set status as approved for approved jobs
+            jobDetails["status"] = "accepted";
             
             approvedJobsArray.append(jobDetails);
         }
