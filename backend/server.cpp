@@ -1261,25 +1261,25 @@ void Server::processRequest(int clientSocket, const std::string &request)
     sendResponse(clientSocket, QJsonDocument(response).toJson(QJsonDocument::Compact).toStdString()); });
     }
     else if (requestType == "getApprovedJobs")
-{
-    QString freelancerId = jsonRequest["freelancerId"].toString();
-    QJsonObject response;
-
-    if (freelancerId.isEmpty())
     {
-        QJsonObject err;
-        err["status"] = "error";
-        err["error"] = "getApprovedJobs requires a freelancerId";
-        sendResponse(clientSocket, QJsonDocument(err).toJson(QJsonDocument::Compact).toStdString());
-        return;
-    }
+        QString freelancerId = jsonRequest["freelancerId"].toString();
+        QJsonObject response;
 
-    auto jobsQuery = firestore->Collection("jobs").Get();
+        if (freelancerId.isEmpty())
+        {
+            QJsonObject err;
+            err["status"] = "error";
+            err["error"] = "getApprovedJobs requires a freelancerId";
+            sendResponse(clientSocket, QJsonDocument(err).toJson(QJsonDocument::Compact).toStdString());
+            return;
+        }
 
-    qDebug() << "getApprovedJobs 1" << Qt::endl;
+        auto jobsQuery = firestore->Collection("jobs").Get();
 
-    jobsQuery.OnCompletion([this, clientSocket, freelancerId](const firebase::Future<firebase::firestore::QuerySnapshot> &future)
-                    {
+        qDebug() << "getApprovedJobs 1" << Qt::endl;
+
+        jobsQuery.OnCompletion([this, clientSocket, freelancerId](const firebase::Future<firebase::firestore::QuerySnapshot> &future)
+                               {
     QJsonObject response;
     QJsonArray approvedJobsArray;
     
@@ -1376,7 +1376,7 @@ void Server::processRequest(int clientSocket, const std::string &request)
     qDebug() << "getApprovedJobs" << approvedJobsArray;
     // Set the final response object and send it - just ONCE
     QJsonDocument doc(response);
-    sendResponse(clientSocket, doc.toJson(QJsonDocument::Compact).toStdString());});
+    sendResponse(clientSocket, doc.toJson(QJsonDocument::Compact).toStdString()); });
     }
     else if (requestType == "getProposals")
     {
@@ -1560,6 +1560,7 @@ void Server::processRequest(int clientSocket, const std::string &request)
     {
         QString jobId = jsonRequest["jobId"].toString();
         QString newStatus = jsonRequest["status"].toString(); // "pending", "in-progress", "complete"
+        QString freelancerId = jsonRequest["freelancerId"].toString();
 
         auto jobRef = firestore->Collection("jobs").Document(jobId.toStdString());
 
@@ -1578,7 +1579,114 @@ void Server::processRequest(int clientSocket, const std::string &request)
             QJsonDocument doc(response);
             sendResponse(clientSocket, doc.toJson(QJsonDocument::Compact).toStdString()); });
     }
+    else if (requestType == "completeJob")
+    {
+        QString jobId = jsonRequest["jobId"].toString();
+        QString hiringManagerId = jsonRequest["hiringManagerId"].toString();
+        QString freelancerId = jsonRequest["freelancerId"].toString();
+        QString jobTitle = jsonRequest["jobTitle"].toString();
+        QString jobDescription = jsonRequest["jobDescription"].toString();
+        double budgetRequested = jsonRequest["budgetRequested"].toDouble();
 
+        if (jobId.isEmpty() || hiringManagerId.isEmpty() || freelancerId.isEmpty())
+        {
+            QJsonObject err;
+            err["status"] = "error";
+            err["error"] = "completeJob requires jobId, hiringManagerId, and freelancerId";
+            sendResponse(clientSocket, QJsonDocument(err).toJson(QJsonDocument::Compact).toStdString());
+            return;
+        }
+
+        qDebug() << "Completing job:" << jobId << "for HM:" << hiringManagerId << "and Freelancer:" << freelancerId;
+
+        // First, get the job details before deleting it
+        firebase::firestore::DocumentReference jobRef = firestore->Collection("jobs").Document(jobId.toStdString());
+
+        auto getJobFuture = jobRef.Get();
+        getJobFuture.OnCompletion([this, clientSocket, jobId, hiringManagerId, freelancerId, jobTitle, jobDescription, budgetRequested](const firebase::Future<firebase::firestore::DocumentSnapshot> &future)
+                                  {
+        
+        if (future.error() != firebase::firestore::kErrorOk) {
+            QJsonObject response;
+            response["status"] = "error";
+            response["error"] = QString::fromStdString(future.error_message());
+            sendResponse(clientSocket, QJsonDocument(response).toJson(QJsonDocument::Compact).toStdString());
+            return;
+        }
+
+        firebase::firestore::DocumentSnapshot snapshot = *future.result();
+        
+        if (!snapshot.exists()) {
+            QJsonObject response;
+            response["status"] = "error";
+            response["error"] = "Job not found";
+            sendResponse(clientSocket, QJsonDocument(response).toJson(QJsonDocument::Compact).toStdString());
+            return;
+        }
+
+        // Create the completed job entry
+        firebase::firestore::MapFieldValue completedJobEntry;
+        completedJobEntry["jobId"] = firebase::firestore::FieldValue::String(jobId.toStdString());
+        completedJobEntry["hiringManagerId"] = firebase::firestore::FieldValue::String(hiringManagerId.toStdString());
+        completedJobEntry["freelancerId"] = firebase::firestore::FieldValue::String(freelancerId.toStdString());
+        completedJobEntry["jobTitle"] = firebase::firestore::FieldValue::String(jobTitle.toStdString());
+        completedJobEntry["jobDescription"] = firebase::firestore::FieldValue::String(jobDescription.toStdString());
+        completedJobEntry["budgetRequested"] = firebase::firestore::FieldValue::Double(budgetRequested);
+        completedJobEntry["completedAt"] = firebase::firestore::FieldValue::Timestamp(firebase::Timestamp::Now());
+
+        // Counter for completed operations
+        auto completionCounter = std::make_shared<int>(0);
+        auto totalOperations = 3; // 2 user updates + 1 job deletion
+        auto hasError = std::make_shared<bool>(false);
+        auto errorMessage = std::make_shared<QString>();
+
+        auto checkCompletion = [this, clientSocket, completionCounter, totalOperations, hasError, errorMessage]() {
+            (*completionCounter)++;
+            if (*completionCounter >= totalOperations) {
+                QJsonObject response;
+                if (*hasError) {
+                    response["status"] = "error";
+                    response["error"] = *errorMessage;
+                } else {
+                    response["status"] = "success";
+                    response["message"] = "Job completed successfully";
+                }
+                sendResponse(clientSocket, QJsonDocument(response).toJson(QJsonDocument::Compact).toStdString());
+            }
+        };
+
+        // Add to hiring manager's completed jobs
+        firebase::firestore::DocumentReference hmRef = firestore->Collection("users").Document(hiringManagerId.toStdString());
+        hmRef.Update({{"completedJobs", firebase::firestore::FieldValue::ArrayUnion({firebase::firestore::FieldValue::Map(completedJobEntry)})}})
+        .OnCompletion([checkCompletion, hasError, errorMessage](const firebase::Future<void> &future) {
+            if (future.error() != firebase::firestore::kErrorOk) {
+                *hasError = true;
+                *errorMessage = QString("Failed to update hiring manager's completed jobs: ") + QString::fromStdString(future.error_message());
+            }
+            checkCompletion();
+        });
+
+        // Add to freelancer's completed jobs
+        firebase::firestore::DocumentReference freelancerRef = firestore->Collection("users").Document(freelancerId.toStdString());
+        freelancerRef.Update({{"completedJobs", firebase::firestore::FieldValue::ArrayUnion({firebase::firestore::FieldValue::Map(completedJobEntry)})}})
+        .OnCompletion([checkCompletion, hasError, errorMessage](const firebase::Future<void> &future) {
+            if (future.error() != firebase::firestore::kErrorOk) {
+                *hasError = true;
+                *errorMessage = QString("Failed to update freelancer's completed jobs: ") + QString::fromStdString(future.error_message());
+            }
+            checkCompletion();
+        });
+
+        // Delete the job from jobs collection
+        firebase::firestore::DocumentReference jobRef = firestore->Collection("jobs").Document(jobId.toStdString());
+        jobRef.Delete().OnCompletion([checkCompletion, hasError, errorMessage](const firebase::Future<void> &future) {
+            if (future.error() != firebase::firestore::kErrorOk) {
+                *hasError = true;
+                *errorMessage = QString("Failed to delete job from active jobs: ") + QString::fromStdString(future.error_message());
+            }
+            checkCompletion();
+        }); });
+    }
     else if (requestType == "updateCompletedJobs")
     {
         QString userId = jsonRequest["userId"].toString();

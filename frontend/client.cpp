@@ -900,6 +900,7 @@ void BackendClient::respondToProposal(const QString &jobId,
 
 void BackendClient::updateJobStatus(const QString &jobId,
                                     const QString &newStatus,
+                                    const QString &freelancerId,
                                     std::function<void(bool)> callback)
 {
     QJsonObject request;
@@ -999,4 +1000,27 @@ void BackendClient::rateUser(const QString &fromUserId,
                 {
         bool ok = (resp["status"].toString() == "success");
         callback(ok); });
+}
+
+void BackendClient::completeJob(const QString &jobId,
+                               const QString &hiringManagerId, 
+                               const QString &freelancerId,
+                               const QString &jobTitle,
+                               const QString &jobDescription,
+                               double budgetRequested,
+                               std::function<void(bool)> callback)
+{
+    QJsonObject request;
+    request["type"] = "completeJob";
+    request["jobId"] = jobId;
+    request["hiringManagerId"] = hiringManagerId;
+    request["freelancerId"] = freelancerId;
+    request["jobTitle"] = jobTitle;
+    request["jobDescription"] = jobDescription;
+    request["budgetRequested"] = budgetRequested;
+
+    sendRequest(request, [callback](const QJsonObject &response) {
+        bool success = (response["status"].toString() == "success");
+        callback(success);
+    });
 }

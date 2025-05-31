@@ -31,7 +31,6 @@
 #include <QDateTime>
 #include <QTimer>
 
-
 HiringManagerPortal::HiringManagerPortal(QWidget *parent) : QWidget(parent), currentUser(nullptr)
 {
     QVBoxLayout *mainLayout = new QVBoxLayout(this);
@@ -331,28 +330,28 @@ QWidget *HiringManagerPortal::createDashboardTab()
                             {
                                 // Get proposal data from the item's data role
                                 QVariantMap proposalData = current->data(Qt::UserRole).toMap();
-                
+
                                 // Update job details
                                 jobTitleLabel->setText(proposalData["jobTitle"].toString());
                                 jobDescLabel->setText(proposalData["jobDescription"].toString());
                                 jobPaymentLabel->setText("$" + proposalData["payment"].toString());
-                
+
                                 // Update freelancer details
                                 freelancerNameLabel->setText(proposalData["freelancerName"].toString());
                                 freelancerEmailLabel->setText(proposalData["freelancerEmail"].toString());
                                 freelancerSkillsLabel->setText(proposalData["freelancerSkills"].toString());
-                
+
                                 // Update proposal content
                                 proposalText->setText(proposalData["proposalDescription"].toString());
                                 requestedBudgetLabel->setText("Requested Budget: " + proposalData["requestedBudget"].toString());
-                
+
                                 QString status = proposalData["status"].toString();
-                                
+
                                 if (status == "pending")
                                 {
                                     proposalStatusLabel->setText("Status: Pending");
                                     proposalStatusLabel->setStyleSheet("font-weight: bold; color: #ffc107;");
-                                    
+
                                     // Show accept/reject buttons for pending proposals
                                     viewDetailsBtn->setEnabled(true);
                                     acceptPrpslBtn->setEnabled(true);
@@ -366,7 +365,7 @@ QWidget *HiringManagerPortal::createDashboardTab()
                                 {
                                     proposalStatusLabel->setText("Status: Accepted - In Progress");
                                     proposalStatusLabel->setStyleSheet("font-weight: bold; color: #28a745;");
-                                    
+
                                     // Show complete job button for accepted proposals
                                     viewDetailsBtn->setEnabled(true);
                                     acceptPrpslBtn->setEnabled(true);
@@ -380,7 +379,7 @@ QWidget *HiringManagerPortal::createDashboardTab()
                                 {
                                     proposalStatusLabel->setText("Status: Rejected");
                                     proposalStatusLabel->setStyleSheet("font-weight: bold; color: #dc3545;");
-                                    
+
                                     // Allow re-accepting rejected proposals
                                     viewDetailsBtn->setEnabled(true);
                                     acceptPrpslBtn->setEnabled(true);
@@ -394,7 +393,7 @@ QWidget *HiringManagerPortal::createDashboardTab()
                                 {
                                     proposalStatusLabel->setText("Status: Completed");
                                     proposalStatusLabel->setStyleSheet("font-weight: bold; color: #6f42c1;"); // Purple
-                                    
+
                                     // No actions available for completed jobs
                                     viewDetailsBtn->setEnabled(true);
                                     acceptPrpslBtn->setEnabled(false);
@@ -431,42 +430,83 @@ QWidget *HiringManagerPortal::createDashboardTab()
 
     connect(acceptPrpslBtn, &QPushButton::clicked, [=]()
             {
-        if (incomingPrpsls->currentItem()) {
+        if (incomingPrpsls->currentItem())
+        {
             QVariantMap proposalData = incomingPrpsls->currentItem()->data(Qt::UserRole).toMap();
-            
-            QMessageBox::StandardButton confirm = QMessageBox::question(
-                this, "Accept Proposal",
-                "Are you sure you want to accept the proposal from " + 
-                proposalData["freelancerName"].toString() + "?",
-                QMessageBox::Yes | QMessageBox::No);
-                
-            if (confirm == QMessageBox::Yes) {
-                // Update proposal status in the backend
-                updateProposalStatus(
-                    proposalData["jobId"].toString(),
-                    proposalData["freelancerId"].toString(),
-                    "accepted"
-                );
-                
-                // Update UI
-                proposalStatusLabel->setText("Status: Accepted");
-                proposalStatusLabel->setStyleSheet("font-weight: bold; color: #28a745;");
-                acceptPrpslBtn->setEnabled(false);
-                
-                // Update the item in the list
-                QVariantMap updatedData = proposalData;
-                updatedData["status"] = "accepted";
-                incomingPrpsls->currentItem()->setData(Qt::UserRole, updatedData);
-                
-                // Add visual indication in the list
-                incomingPrpsls->currentItem()->setText(
-                    "✓ " + proposalData["jobTitle"].toString() + " - " + 
-                    proposalData["freelancerName"].toString()
-                );
-                incomingPrpsls->currentItem()->setBackground(QBrush(QColor("#d4edda")));
+            QString currentStatus = proposalData["status"].toString();
+
+            if (currentStatus == "pending" || currentStatus == "rejected")
+            {
+                // Accept proposal functionality
+                QMessageBox::StandardButton confirm = QMessageBox::question(
+                    this, "Accept Proposal",
+                    "Are you sure you want to accept the proposal from " +
+                        proposalData["freelancerName"].toString() + "?",
+                    QMessageBox::Yes | QMessageBox::No);
+
+                if (confirm == QMessageBox::Yes)
+                {
+                    // Update proposal status in the backend
+                    updateProposalStatus(
+                        proposalData["jobId"].toString(),
+                        proposalData["freelancerId"].toString(),
+                        "accepted");
+
+                    // Update UI
+                    proposalStatusLabel->setText("Status: Accepted - In Progress");
+                    proposalStatusLabel->setStyleSheet("font-weight: bold; color: #28a745;");
+
+                    // Change button to "Complete Job"
+                    acceptPrpslBtn->setText("Complete Job");
+                    acceptPrpslBtn->setStyleSheet("background-color: #17a2b8; color: white;");
+                    rejectPrpslBtn->setEnabled(false);
+
+                    // Update the item in the list
+                    QVariantMap updatedData = proposalData;
+                    updatedData["status"] = "accepted";
+                    incomingPrpsls->currentItem()->setData(Qt::UserRole, updatedData);
+
+                    // Update visual indication in the list
+                    incomingPrpsls->currentItem()->setText(
+                        "✓ " + proposalData["jobTitle"].toString() + " - " +
+                        proposalData["freelancerName"].toString());
+                    incomingPrpsls->currentItem()->setBackground(QBrush(QColor("#d4edda")));
+                }
+            }
+            else if (currentStatus == "accepted")
+            {
+                // Complete job functionality
+                QMessageBox::StandardButton confirm = QMessageBox::question(
+                    this, "Complete Job",
+                    "Are you sure you want to mark this job as completed?\n\n"
+                    "Job: " +
+                        proposalData["jobTitle"].toString() + "\n"
+                                                              "Freelancer: " +
+                        proposalData["freelancerName"].toString() + "\n\n"
+                                                                    "This will move the job to completed jobs and remove it from active listings.",
+                    QMessageBox::Yes | QMessageBox::No);
+
+                if (confirm == QMessageBox::Yes)
+                {
+                    // Get current hiring manager
+                    HiringManager *hiringManager = UserManager::getInstance()->getCurrentHiringManager();
+                    if (!hiringManager)
+                    {
+                        QMessageBox::warning(this, "Error", "Could not retrieve hiring manager information.");
+                        return;
+                    }
+
+                    // Complete the job (this will handle moving to completed jobs and deleting from jobs collection)
+                    completeJob(
+                        proposalData["jobId"].toString(),
+                        QString::fromStdString(hiringManager->getUid()),
+                        proposalData["freelancerId"].toString(),
+                        proposalData["jobTitle"].toString(),
+                        proposalData["jobDescription"].toString(),
+                        proposalData["requestedBudget"].toString().toDouble());
+                }
             }
         } });
-
     connect(rejectPrpslBtn, &QPushButton::clicked, [=]()
             {
         if (incomingPrpsls->currentItem()) {
@@ -633,67 +673,68 @@ QWidget *HiringManagerPortal::createPostJobTab()
 {
     QWidget *postJobWidget = new QWidget();
     QVBoxLayout *mainLayout = new QVBoxLayout(postJobWidget);
-    
+
     // Create a scrollable area for the form
     QScrollArea *scrollArea = new QScrollArea();
     QWidget *formWidget = new QWidget();
     QVBoxLayout *formLayout = new QVBoxLayout(formWidget);
-    
+
     // Job posting form
     QGroupBox *jobFormGroup = new QGroupBox("Post New Job");
     QFormLayout *jobFormLayout = new QFormLayout();
-    
+
     // Job title
     QLineEdit *jobTitleEdit = new QLineEdit();
     jobTitleEdit->setPlaceholderText("Enter job title...");
     jobFormLayout->addRow("Job Title*:", jobTitleEdit);
-    
+
     // Job description
     QTextEdit *jobDescEdit = new QTextEdit();
     jobDescEdit->setPlaceholderText("Describe the job requirements, responsibilities, and any other relevant details...");
     jobDescEdit->setMinimumHeight(150);
     jobFormLayout->addRow("Job Description*:", jobDescEdit);
-    
+
     // Payment/Budget
     QLineEdit *paymentEdit = new QLineEdit();
     paymentEdit->setPlaceholderText("e.g., 2500");
     jobFormLayout->addRow("Budget ($)*:", paymentEdit);
-    
+
     // Required skills
     QLineEdit *skillsEdit = new QLineEdit();
     skillsEdit->setPlaceholderText("e.g., React, TypeScript, Node.js (comma separated)");
     jobFormLayout->addRow("Required Skills*:", skillsEdit);
-    
+
     // Expiry date (optional)
     QLineEdit *expiryEdit = new QLineEdit();
     expiryEdit->setPlaceholderText("YYYY-MM-DD (optional)");
     jobFormLayout->addRow("Expiry Date:", expiryEdit);
-    
+
     jobFormGroup->setLayout(jobFormLayout);
-    
+
     // Buttons
     QHBoxLayout *buttonLayout = new QHBoxLayout();
     QPushButton *postJobBtn = new QPushButton("Post Job");
     postJobBtn->setStyleSheet("background-color: #28a745; color: white; padding: 10px 20px; font-size: 14px;");
-    
+
     QPushButton *clearFormBtn = new QPushButton("Clear Form");
     clearFormBtn->setStyleSheet("background-color: #6c757d; color: white; padding: 10px 20px; font-size: 14px;");
-    
+
     buttonLayout->addStretch();
     buttonLayout->addWidget(clearFormBtn);
     buttonLayout->addWidget(postJobBtn);
-    
+
     // Connect clear button
-    connect(clearFormBtn, &QPushButton::clicked, [=]() {
+    connect(clearFormBtn, &QPushButton::clicked, [=]()
+            {
         jobTitleEdit->clear();
         jobDescEdit->clear();
         paymentEdit->clear();
         skillsEdit->clear();
-        expiryEdit->clear();
-    });
-    
+        expiryEdit->clear(); });
+
     // Connect post job button - THIS IS WHERE WE CALL addJob
-    connect(postJobBtn, &QPushButton::clicked, [=]() {
+    connect(postJobBtn, &QPushButton::clicked, [=]()
+            {
         // Validate required fields
         if (jobTitleEdit->text().trimmed().isEmpty()) {
             QMessageBox::warning(this, "Validation Error", "Job title is required.");
@@ -777,22 +818,21 @@ QWidget *HiringManagerPortal::createPostJobTab()
                 QMessageBox::warning(this, "Error", 
                     "Failed to post job. Please check your connection and try again.");
             }
-        });
-    });
-    
+        }); });
+
     // Add everything to the form layout
     formLayout->addWidget(jobFormGroup);
     formLayout->addLayout(buttonLayout);
     formLayout->addStretch();
-    
+
     // Set up scroll area
     scrollArea->setWidget(formWidget);
     scrollArea->setWidgetResizable(true);
     scrollArea->setHorizontalScrollBarPolicy(Qt::ScrollBarAsNeeded);
     scrollArea->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
-    
+
     mainLayout->addWidget(scrollArea);
-    
+
     return postJobWidget;
 }
 
@@ -1155,71 +1195,71 @@ void HiringManagerPortal::loadProposalsForHiringManager()
     // Get proposals using employer ID
     QString employerId = QString::fromStdString(hiringManager->getName());
     BackendClient::getInstance()->getProposals(employerId,
-        [this](bool success, const QJsonArray &proposals)
-        {
-        if (success)
-        {
-        int pendingCount = 0;
+                                               [this](bool success, const QJsonArray &proposals)
+                                               {
+                                                   if (success)
+                                                   {
+                                                       int pendingCount = 0;
 
-        for (const QJsonValue &proposalValue : proposals)
-        {
-            QJsonObject proposalObj = proposalValue.toObject();
+                                                       for (const QJsonValue &proposalValue : proposals)
+                                                       {
+                                                           QJsonObject proposalObj = proposalValue.toObject();
 
-            // Create display item for the list
-            QString freelancerName = proposalObj["freelancerName"].toString();
-            QString jobTitle = proposalObj["jobTitle"].toString();
-            QString status = proposalObj["status"].toString();
+                                                           // Create display item for the list
+                                                           QString freelancerName = proposalObj["freelancerName"].toString();
+                                                           QString jobTitle = proposalObj["jobTitle"].toString();
+                                                           QString status = proposalObj["status"].toString();
 
-            // Create list item with status indicator
-            QListWidgetItem *item = new QListWidgetItem();
-            QString displayText = jobTitle + " - " + freelancerName;
+                                                           // Create list item with status indicator
+                                                           QListWidgetItem *item = new QListWidgetItem();
+                                                           QString displayText = jobTitle + " - " + freelancerName;
 
-            if (status == "pending")
-            {
-                item->setText(displayText);
-                pendingCount++;
-            }
-            else if (status == "accepted")
-            {
-                item->setText("✓ " + displayText);
-                item->setBackground(QBrush(QColor("#d4edda"))); // Light green
-            }
-            else if (status == "rejected")
-            {
-                item->setText("✗ " + displayText);
-                item->setBackground(QBrush(QColor("#f8d7da"))); // Light red
-            }
+                                                           if (status == "pending")
+                                                           {
+                                                               item->setText(displayText);
+                                                               pendingCount++;
+                                                           }
+                                                           else if (status == "accepted")
+                                                           {
+                                                               item->setText("✓ " + displayText);
+                                                               item->setBackground(QBrush(QColor("#d4edda"))); // Light green
+                                                           }
+                                                           else if (status == "rejected")
+                                                           {
+                                                               item->setText("✗ " + displayText);
+                                                               item->setBackground(QBrush(QColor("#f8d7da"))); // Light red
+                                                           }
 
-            // Store all proposal data in the item's user role
-            QVariantMap proposalData;
-            for (auto it = proposalObj.constBegin(); it != proposalObj.constEnd(); ++it)
-            {
-                proposalData[it.key()] = it.value().toVariant();
-            }
+                                                           // Store all proposal data in the item's user role
+                                                           QVariantMap proposalData;
+                                                           for (auto it = proposalObj.constBegin(); it != proposalObj.constEnd(); ++it)
+                                                           {
+                                                               proposalData[it.key()] = it.value().toVariant();
+                                                           }
 
-            item->setData(Qt::UserRole, proposalData);
-            incomingPrpsls->addItem(item);
-        }
+                                                           item->setData(Qt::UserRole, proposalData);
+                                                           incomingPrpsls->addItem(item);
+                                                       }
 
-        // Update the summary count
-        QList<QLabel *> labels = findChildren<QLabel *>();
-        for (QLabel *label : labels)
-        {
-            if (label->styleSheet().contains("color: #ffc107"))
-            { // Yellow color for pending
-                label->setText(QString::number(pendingCount));
-                break;
-            }
-        }
-        }
-        else
-        {
-        qDebug() << "Failed to load proposals";
-        QListWidgetItem *errorItem = new QListWidgetItem("Failed to load proposals");
-        errorItem->setFlags(errorItem->flags() & ~Qt::ItemIsEnabled);
-        incomingPrpsls->addItem(errorItem);
-        }
-        });
+                                                       // Update the summary count
+                                                       QList<QLabel *> labels = findChildren<QLabel *>();
+                                                       for (QLabel *label : labels)
+                                                       {
+                                                           if (label->styleSheet().contains("color: #ffc107"))
+                                                           { // Yellow color for pending
+                                                               label->setText(QString::number(pendingCount));
+                                                               break;
+                                                           }
+                                                       }
+                                                   }
+                                                   else
+                                                   {
+                                                       qDebug() << "Failed to load proposals";
+                                                       QListWidgetItem *errorItem = new QListWidgetItem("Failed to load proposals");
+                                                       errorItem->setFlags(errorItem->flags() & ~Qt::ItemIsEnabled);
+                                                       incomingPrpsls->addItem(errorItem);
+                                                   }
+                                               });
 }
 
 void HiringManagerPortal::updateProposalStatus(const QString &jobId, const QString &freelancerId, const QString &status)
@@ -1227,15 +1267,19 @@ void HiringManagerPortal::updateProposalStatus(const QString &jobId, const QStri
     BackendClient *client = BackendClient::getInstance();
 
     QJsonObject request;
-    request["type"] = "updateProposalStatus";
-    request["jobId"] = jobId;
+    request["type"] = "updateJobStatus";
     request["freelancerId"] = freelancerId;
+    request["jobId"] = jobId;
     request["status"] = status;
 
     client->sendRequest(request, [this, status](const QJsonObject &response)
                         {
         if (response["status"].toString() == "success") {
-            QString message = status == "accepted" ? "Proposal accepted successfully!" : "Proposal rejected successfully!";
+            QString message = status;
+            if (message == "accepted")
+                message = "Proposal accepted successfully!";
+            else
+                message = "Proposal rejected successfully!";
             QMessageBox::information(this, "Success", message);
             
             // If you accepted a proposal, refresh to update other proposals that might need to be rejected
@@ -1246,4 +1290,33 @@ void HiringManagerPortal::updateProposalStatus(const QString &jobId, const QStri
             QMessageBox::warning(this, "Error", 
                 "Failed to update proposal status: " + response["error"].toString());
         } });
+}
+
+// Add to HiringManagerPortal.cpp:
+void HiringManagerPortal::completeJob(const QString &jobId, 
+                                     const QString &hiringManagerId, 
+                                     const QString &freelancerId,
+                                     const QString &jobTitle,
+                                     const QString &jobDescription,
+                                     double budgetRequested)
+{
+    BackendClient *client = BackendClient::getInstance();
+    
+    // Call the backend to complete the job
+    client->completeJob(jobId, hiringManagerId, freelancerId, jobTitle, jobDescription, budgetRequested,
+        [this, jobTitle](bool success) {
+            if (success) {
+                QMessageBox::information(this, "Job Completed", 
+                    QString("Job '%1' has been completed successfully!\n\n").arg(jobTitle) +
+                    "The job has been moved to completed jobs for both you and the freelancer.\n" +
+                    "You can now rate the freelancer in the Ratings & Reviews tab.");
+                
+                // Refresh the proposals list to remove the completed job
+                loadProposalsForHiringManager();
+                
+            } else {
+                QMessageBox::warning(this, "Error", 
+                    "Failed to complete the job. Please try again.");
+            }
+        });
 }

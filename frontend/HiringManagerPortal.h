@@ -33,7 +33,12 @@ private:
   void fetchProfileFromFirebase();
   void loadProposalsForHiringManager();
   void updateProposalStatus(const QString &jobId, const QString &freelancerId, const QString &status);
-
+  void completeJob(const QString &jobId, 
+                  const QString &hiringManagerId, 
+                  const QString &freelancerId,
+                  const QString &jobTitle,
+                  const QString &jobDescription,
+                  double budgetRequested);
   // UI elements that need to be accessed from multiple methods
   QListWidget *incomingPrpsls;
   QLabel *nameLabel;
