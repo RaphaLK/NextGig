@@ -159,8 +159,8 @@ void FreelancerPortal::setupCurrentJobsTab()
     appliedJobsList = new QListWidget();
     appliedJobsList->setStyleSheet(
         "QListWidget::item { padding: 8px; border-bottom: 1px solid #e0e0e0; }"
-        "QListWidget::item:selected { background-color: #e3f2fd; }"
-        "QListWidget::item:hover { background-color: #f5f5f5; }"
+        "QListWidget::item:selected { background-color: #4a5759; }"
+        "QListWidget::item:hover { background-color: #b0c4b1; }"
     );
     appliedLayout->addWidget(appliedJobsList);
     appliedJobsGroup->setLayout(appliedLayout);
@@ -173,8 +173,8 @@ void FreelancerPortal::setupCurrentJobsTab()
     approvedJobsList = new QListWidget();
     approvedJobsList->setStyleSheet(
         "QListWidget::item { padding: 8px; border-bottom: 1px solid #e0e0e0; }"
-        "QListWidget::item:selected { background-color: #e8f5e8; }"
-        "QListWidget::item:hover { background-color: #f5f5f5; }"
+        "QListWidget::item:selected { background-color: #4a5759; }"
+        "QListWidget::item:hover { background-color: #b0c4b1; }"
     );
     approvedLayout->addWidget(approvedJobsList);
     approvedJobsGroup->setLayout(approvedLayout);

@@ -585,7 +585,6 @@ QWidget *HiringManagerPortal::createProfileTab()
     infoLayout->addRow("Name:", nameLabel);
     infoLayout->addRow("Email:", emailLabel);
     infoLayout->addRow("Company Description:", descriptionTextEdit);
-    infoLayout->addRow("Company Name:", companyNameLabel);
     infoGroup->setLayout(infoLayout);
 
     QGroupBox *accomplishmentsGroup = new QGroupBox("Company Accomplishments");
