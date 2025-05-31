@@ -219,8 +219,18 @@ QWidget *HiringManagerPortal::createDashboardTab()
     QVBoxLayout *jobsLayout = new QVBoxLayout();
 
     incomingPrpsls = new QListWidget();
-    incomingPrpsls->setStyleSheet("QListWidget::item { padding: 8px; border-bottom: 1px solid #eaeaea; }");
-
+    incomingPrpsls->setStyleSheet(
+        "QListWidget::item { "
+        "padding: 8px; "
+        "border-bottom: 1px solid #eaeaea; "
+        "} "
+        "QListWidget::item:selected { "
+        "background-color: #403d39; " // Semi-transparent blue
+        "border: 2px solid #007bff; "
+        "} "
+        "QListWidget::item:hover { "
+        "background-color: rgba(108, 117, 125, 0.1); " // Light gray on hover
+        "}");
     // Add a refresh button
     QPushButton *refreshProposalsBtn = new QPushButton("Refresh Proposals");
     refreshProposalsBtn->setStyleSheet("background-color: #6c757d; color: white; padding: 5px;");
@@ -1292,30 +1302,33 @@ void HiringManagerPortal::updateProposalStatus(const QString &jobId, const QStri
 }
 
 // Add to HiringManagerPortal.cpp:
-void HiringManagerPortal::completeJob(const QString &jobId, 
-                                     const QString &hiringManagerId, 
-                                     const QString &freelancerId,
-                                     const QString &jobTitle,
-                                     const QString &jobDescription,
-                                     double budgetRequested)
+void HiringManagerPortal::completeJob(const QString &jobId,
+                                      const QString &hiringManagerId,
+                                      const QString &freelancerId,
+                                      const QString &jobTitle,
+                                      const QString &jobDescription,
+                                      double budgetRequested)
 {
     BackendClient *client = BackendClient::getInstance();
-    
+
     // Call the backend to complete the job
     client->completeJob(jobId, hiringManagerId, freelancerId, jobTitle, jobDescription, budgetRequested,
-        [this, jobTitle](bool success) {
-            if (success) {
-                QMessageBox::information(this, "Job Completed", 
-                    QString("Job '%1' has been completed successfully!\n\n").arg(jobTitle) +
-                    "The job has been moved to completed jobs for both you and the freelancer.\n" +
-                    "You can now rate the freelancer in the Ratings & Reviews tab.");
-                
-                // Refresh the proposals list to remove the completed job
-                loadProposalsForHiringManager();
-                
-            } else {
-                QMessageBox::warning(this, "Error", 
-                    "Failed to complete the job. Please try again.");
-            }
-        });
+                        [this, jobTitle](bool success)
+                        {
+                            if (success)
+                            {
+                                QMessageBox::information(this, "Job Completed",
+                                                         QString("Job '%1' has been completed successfully!\n\n").arg(jobTitle) +
+                                                             "The job has been moved to completed jobs for both you and the freelancer.\n" +
+                                                             "You can now rate the freelancer in the Ratings & Reviews tab.");
+
+                                // Refresh the proposals list to remove the completed job
+                                loadProposalsForHiringManager();
+                            }
+                            else
+                            {
+                                QMessageBox::warning(this, "Error",
+                                                     "Failed to complete the job. Please try again.");
+                            }
+                        });
 }
