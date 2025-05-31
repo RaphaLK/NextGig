@@ -551,10 +551,13 @@ void FreelancerPortal::loadUserData()
     }
     profileSkillsLabel->setText(skillsList.isEmpty() ? "No skills added yet" : skillsList.join(" • "));
     
-    // Education
+    // Education - Handle empty fields properly
     User::education edu = freelancer->getEducation();
-    profileEducationLabel->setText(QString::fromStdString(edu.school));
-    profileDegreeLabel->setText(QString::fromStdString(edu.degreeLvl));
+    QString schoolText = QString::fromStdString(edu.school);
+    QString degreeText = QString::fromStdString(edu.degreeLvl);
+    
+    profileEducationLabel->setText(schoolText.isEmpty() ? "No institution added yet" : schoolText);
+    profileDegreeLabel->setText(degreeText.isEmpty() ? "No degree added yet" : degreeText);
     
     // Accomplishments
     QStringList accomplishmentsList;

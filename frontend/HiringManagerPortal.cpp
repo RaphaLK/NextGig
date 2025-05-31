@@ -663,21 +663,11 @@ QWidget *HiringManagerPortal::createProfileTab()
         dialog->exec();
         delete dialog; });
 
-    // Company/User stats
-    QGroupBox *statsGroup = new QGroupBox("Your Statistics");
-    QFormLayout *statsLayout = new QFormLayout();
-
-    statsLayout->addRow("Jobs Posted:", new QLabel("15"));
-    statsLayout->addRow("Jobs Completed:", new QLabel("12"));
-    statsLayout->addRow("Average Rating:", new QLabel("4.8/5.0"));
-    statsLayout->addRow("Average Response Time:", new QLabel("6 hours"));
-
-    statsGroup->setLayout(statsLayout);
+    
     // Arrange everything in the profile tab
     profileLayout->addWidget(infoGroup);
     profileLayout->addWidget(editProfileBtn, 0, Qt::AlignRight);
     // profileLayout->addWidget(preferencesGroup);
-    profileLayout->addWidget(statsGroup);
     profileLayout->addStretch();
 
     return profileWidget;

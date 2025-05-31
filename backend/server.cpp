@@ -131,14 +131,15 @@ firebase::auth::User *Server::registerUser(const std::string &email, const std::
             
             userData["tags"] = firebase::firestore::FieldValue::Array(emptyTags);
             userData["accomplishments"] = firebase::firestore::FieldValue::Array(emptyAccomplishments);
-            
-            // Create empty education struct
+                        
             firebase::firestore::MapFieldValue education;
-            education["jobTitle"] = firebase::firestore::FieldValue::String("");
+            education["school"] = firebase::firestore::FieldValue::String(""); 
+            education["degreeLvl"] = firebase::firestore::FieldValue::String(""); 
+            education["degree_lvl"] = firebase::firestore::FieldValue::String(""); 
             education["startDate"] = firebase::firestore::FieldValue::String("");
             education["endDate"] = firebase::firestore::FieldValue::String("");
             education["description"] = firebase::firestore::FieldValue::String("");
-            
+            userData["education"] = firebase::firestore::FieldValue::Map(education);
             userData["education"] = firebase::firestore::FieldValue::Map(education);
             userData["jobHistory"] = firebase::firestore::FieldValue::Array(emptyJobHistory);
             
@@ -422,6 +423,9 @@ void Server::processRequest(int clientSocket, const std::string &request)
             firebase::firestore::DocumentReference userDoc = firestore->Collection("users").Document(uid);
             auto userFuture = userDoc.Get();
             
+             // Fix the signin section to properly parse all fields from Firebase:
+            
+            // In the signin section, replace the user data parsing part:
             userFuture.OnCompletion([this, clientSocket, uid, result](const firebase::Future<firebase::firestore::DocumentSnapshot> &future) {
                 QJsonObject response;
                 
@@ -481,9 +485,11 @@ void Server::processRequest(int clientSocket, const std::string &request)
                             if (hourlyRate.is_double()) {
                                 response["hourlyRate"] = hourlyRate.double_value();
                             } else {
-                                response["hourlyRate"] = "0";
+                                response["hourlyRate"] = 0.0;
                             }
                         }
+                        
+                        // Parse skills array
                         auto skillsField = snapshot.Get("skills");
                         if (skillsField.is_array()) {
                             QJsonArray skillsArray;
@@ -494,10 +500,10 @@ void Server::processRequest(int clientSocket, const std::string &request)
                             }
                             response["skills"] = skillsArray;
                         } else {
-                            response["skills"] = QJsonArray(); // Empty array if no skills found
+                            response["skills"] = QJsonArray();
                         }
                         
-                        // Add education object to the response
+                        // Parse education object - FIX THE FIELD PARSING
                         auto educationField = snapshot.Get("education");
                         if (educationField.is_map()) {
                             QJsonObject educationObj;
@@ -510,15 +516,126 @@ void Server::processRequest(int clientSocket, const std::string &request)
                                 educationObj["school"] = "";
                             }
                             
-                            auto degreeLvl = eduMap.find("degree_lvl");
+                            // Check both field name variations
+                            auto degreeLvl = eduMap.find("degreeLvl");
+                            if (degreeLvl == eduMap.end()) {
+                                degreeLvl = eduMap.find("degree_lvl"); // Try alternative field name
+                            }
                             if (degreeLvl != eduMap.end() && degreeLvl->second.is_string()) {
+                                educationObj["degreeLvl"] = QString::fromStdString(degreeLvl->second.string_value());
                                 educationObj["degree_lvl"] = QString::fromStdString(degreeLvl->second.string_value());
                             } else {
+                                educationObj["degreeLvl"] = "";
                                 educationObj["degree_lvl"] = "";
                             }
                             
+                            auto startDate = eduMap.find("startDate");
+                            if (startDate != eduMap.end() && startDate->second.is_string()) {
+                                educationObj["startDate"] = QString::fromStdString(startDate->second.string_value());
+                            } else {
+                                educationObj["startDate"] = "";
+                            }
+                            
+                            auto endDate = eduMap.find("endDate");
+                            if (endDate != eduMap.end() && endDate->second.is_string()) {
+                                educationObj["endDate"] = QString::fromStdString(endDate->second.string_value());
+                            } else {
+                                educationObj["endDate"] = "";
+                            }
+                            
+                            auto eduDescription = eduMap.find("description");
+                            if (eduDescription != eduMap.end() && eduDescription->second.is_string()) {
+                                educationObj["description"] = QString::fromStdString(eduDescription->second.string_value());
+                            } else {
+                                educationObj["description"] = "";
+                            }
+                            
                             response["education"] = educationObj;
+                        } else {
+                            // Provide default education object
+                            QJsonObject defaultEducation;
+                            defaultEducation["school"] = "";
+                            defaultEducation["degreeLvl"] = "";
+                            defaultEducation["degree_lvl"] = "";
+                            defaultEducation["startDate"] = "";
+                            defaultEducation["endDate"] = "";
+                            defaultEducation["description"] = "";
+                            response["education"] = defaultEducation;
                         }
+                        
+                        // Parse accomplishments array - ADD THIS MISSING SECTION
+                        auto accomplishmentsField = snapshot.Get("accomplishments");
+                        if (accomplishmentsField.is_array()) {
+                            QJsonArray accomplishmentsArray;
+                            for (const auto& accomplishment : accomplishmentsField.array_value()) {
+                                if (accomplishment.is_string()) {
+                                    accomplishmentsArray.append(QString::fromStdString(accomplishment.string_value()));
+                                }
+                            }
+                            response["accomplishments"] = accomplishmentsArray;
+                        } else {
+                            response["accomplishments"] = QJsonArray(); // Empty array if no accomplishments found
+                        }
+            
+                        // Parse tags array - ADD THIS MISSING SECTION
+                        auto tagsField = snapshot.Get("tags");
+                        if (tagsField.is_array()) {
+                            QJsonArray tagsArray;
+                            for (const auto& tag : tagsField.array_value()) {
+                                if (tag.is_string()) {
+                                    tagsArray.append(QString::fromStdString(tag.string_value()));
+                                }
+                            }
+                            response["tags"] = tagsArray;
+                        } else {
+                            response["tags"] = QJsonArray(); // Empty array if no tags found
+                        }
+            
+                        // Parse job history array - ADD THIS MISSING SECTION
+                        auto jobHistoryField = snapshot.Get("jobHistory");
+                        if (jobHistoryField.is_array()) {
+                            QJsonArray jobHistoryArray;
+                            for (const auto& job : jobHistoryField.array_value()) {
+                                if (job.is_map()) {
+                                    QJsonObject jobObj;
+                                    auto jobMap = job.map_value();
+                                    
+                                    auto jobTitle = jobMap.find("jobTitle");
+                                    if (jobTitle != jobMap.end() && jobTitle->second.is_string()) {
+                                        jobObj["jobTitle"] = QString::fromStdString(jobTitle->second.string_value());
+                                    } else {
+                                        jobObj["jobTitle"] = "";
+                                    }
+                                    
+                                    auto startDate = jobMap.find("startDate");
+                                    if (startDate != jobMap.end() && startDate->second.is_string()) {
+                                        jobObj["startDate"] = QString::fromStdString(startDate->second.string_value());
+                                    } else {
+                                        jobObj["startDate"] = "";
+                                    }
+                                    
+                                    auto endDate = jobMap.find("endDate");
+                                    if (endDate != jobMap.end() && endDate->second.is_string()) {
+                                        jobObj["endDate"] = QString::fromStdString(endDate->second.string_value());
+                                    } else {
+                                        jobObj["endDate"] = "";
+                                    }
+                                    
+                                    auto description = jobMap.find("description");
+                                    if (description != jobMap.end() && description->second.is_string()) {
+                                        jobObj["description"] = QString::fromStdString(description->second.string_value());
+                                    } else {
+                                        jobObj["description"] = "";
+                                    }
+                                    
+                                    jobHistoryArray.append(jobObj);
+                                }
+                            }
+                            response["jobHistory"] = jobHistoryArray;
+                        } else {
+                            response["jobHistory"] = QJsonArray(); // Empty array if no job history found
+                        }
+                        
                     } else {
                         // User exists in Auth but not in Firestore
                         response["status"] = "error";
@@ -563,6 +680,7 @@ void Server::processRequest(int clientSocket, const std::string &request)
                          sendResponse(clientSocket, responseDoc.toJson(QJsonDocument::Compact).toStdString());
                      });
     }
+
     else if (requestType == "getProfile")
     {
         QString uid = jsonRequest["uid"].toString();
@@ -604,10 +722,12 @@ void Server::processRequest(int clientSocket, const std::string &request)
                 if (username.is_string())
                 {
                     response["name"] = QString::fromStdString(username.string_value());
+                    response["username"] = QString::fromStdString(username.string_value()); // Add username field
                 }
                 else
                 {
                     response["name"] = "No Name";
+                    response["username"] = "No Username";
                 }
 
                 if (email.is_string())
@@ -641,7 +761,16 @@ void Server::processRequest(int clientSocket, const std::string &request)
                     response["companyName"] = "No Company";
                 }
 
-                // **ADD RATINGS DATA HERE**
+                if (companyDesc.is_string())
+                {
+                    response["companyDescription"] = QString::fromStdString(companyDesc.string_value());
+                }
+                else
+                {
+                    response["companyDescription"] = "No Company Description";
+                }
+
+                // Add ratings data
                 auto ratingsField = snapshot.Get("ratings");
                 if (ratingsField.is_array())
                 {
@@ -675,13 +804,8 @@ void Server::processRequest(int clientSocket, const std::string &request)
                             auto timestampIter = ratingMap.find("timestamp");
                             if (timestampIter != ratingMap.end() && timestampIter->second.is_timestamp())
                             {
-                                // Convert timestamp to string if needed
-                                firebase::Timestamp timestamp = timestampIter->second.timestamp_value();
-                                time_t seconds = timestamp.seconds();
-                                struct tm *timeinfo = localtime(&seconds);
-                                char buffer[80];
-                                strftime(buffer, sizeof(buffer), "%Y-%m-%d %H:%M:%S", timeinfo);
-                                ratingObj["timestamp"] = QString::fromStdString(buffer);
+                                // Convert timestamp to readable format if needed
+                                ratingObj["timestamp"] = "Recent";
                             }
 
                             ratingsArray.append(ratingObj);
@@ -709,7 +833,7 @@ void Server::processRequest(int clientSocket, const std::string &request)
             sendResponse(clientSocket, responseDoc.toJson(QJsonDocument::Compact).toStdString());
         };
 
-        // Try direct UID lookup
+        // First try direct UID lookup
         firebase::firestore::DocumentReference userRef = firestore->Collection("users").Document(lookupId.toStdString());
 
         auto future = userRef.Get();
@@ -728,7 +852,64 @@ void Server::processRequest(int clientSocket, const std::string &request)
         }
         
         firebase::firestore::DocumentSnapshot snapshot = *future.result();
-        processProfile(snapshot, lookupId); });
+        
+        if (snapshot.exists()) {
+            // Found by direct UID lookup
+            processProfile(snapshot, lookupId);
+        } else {
+            // Direct UID lookup failed, try username search
+            qDebug() << "Direct UID lookup failed for:" << lookupId << ", trying username search";
+            
+            // Search by username field
+            auto usernameQuery = firestore->Collection("users")
+                                     .WhereEqualTo("username", firebase::firestore::FieldValue::String(lookupId.toStdString()));
+
+            auto queryFuture = usernameQuery.Get();
+            queryFuture.OnCompletion([this, clientSocket, lookupId, processProfile](const firebase::Future<firebase::firestore::QuerySnapshot> &queryFuture)
+            {
+                if (queryFuture.error() != firebase::firestore::kErrorOk)
+                {
+                    qDebug() << "Firestore error searching by username:" << lookupId << "Error:" << queryFuture.error_message();
+                    QJsonObject response;
+                    response["status"] = "error";
+                    response["error"] = QString::fromStdString(queryFuture.error_message());
+                    QJsonDocument responseDoc(response);
+                    sendResponse(clientSocket, responseDoc.toJson(QJsonDocument::Compact).toStdString());
+                    return;
+                }
+                
+                const firebase::firestore::QuerySnapshot* querySnapshot = queryFuture.result();
+                
+                if (querySnapshot->empty()) {
+                    qDebug() << "No user found with username:" << lookupId;
+                    QJsonObject response;
+                    response["status"] = "error";
+                    response["error"] = "Profile not found";
+                    QJsonDocument responseDoc(response);
+                    sendResponse(clientSocket, responseDoc.toJson(QJsonDocument::Compact).toStdString());
+                    return;
+                }
+                
+                if (querySnapshot->size() > 1) {
+                    qWarning() << "Multiple users found with username:" << lookupId << "Using the first one.";
+                }
+                
+                // Get the first matching document
+                auto documents = querySnapshot->documents();
+                if (!documents.empty()) {
+                    const firebase::firestore::DocumentSnapshot& userDoc = documents[0];
+                    qDebug() << "Found user by username:" << lookupId << "UID:" << QString::fromStdString(userDoc.id());
+                    processProfile(userDoc, lookupId);
+                } else {
+                    qDebug() << "No documents in query result for username:" << lookupId;
+                    QJsonObject response;
+                    response["status"] = "error";
+                    response["error"] = "Profile not found";
+                    QJsonDocument responseDoc(response);
+                    sendResponse(clientSocket, responseDoc.toJson(QJsonDocument::Compact).toStdString());
+                }
+            });
+        } });
     }
     else if (requestType == "signout")
     {
@@ -799,8 +980,25 @@ void Server::processRequest(int clientSocket, const std::string &request)
             QJsonObject educationObj = jsonRequest["education"].toObject();
             firebase::firestore::MapFieldValue education;
 
-            education["jobTitle"] = firebase::firestore::FieldValue::String(
-                educationObj["jobTitle"].toString().toStdString());
+            education["school"] = firebase::firestore::FieldValue::String(
+                educationObj["school"].toString().toStdString());
+
+            // Handle both field name variations
+            if (educationObj.contains("degreeLvl"))
+            {
+                education["degreeLvl"] = firebase::firestore::FieldValue::String(
+                    educationObj["degreeLvl"].toString().toStdString());
+                education["degree_lvl"] = firebase::firestore::FieldValue::String(
+                    educationObj["degreeLvl"].toString().toStdString());
+            }
+            else if (educationObj.contains("degree_lvl"))
+            {
+                education["degree_lvl"] = firebase::firestore::FieldValue::String(
+                    educationObj["degree_lvl"].toString().toStdString());
+                education["degreeLvl"] = firebase::firestore::FieldValue::String(
+                    educationObj["degree_lvl"].toString().toStdString());
+            }
+
             education["startDate"] = firebase::firestore::FieldValue::String(
                 educationObj["startDate"].toString().toStdString());
             education["endDate"] = firebase::firestore::FieldValue::String(
