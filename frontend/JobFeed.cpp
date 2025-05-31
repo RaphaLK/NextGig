@@ -476,8 +476,8 @@ void JobFeed::onApplyClicked()
     
     // Create proposal
     Proposal proposal(
-        freelancer->getUid(),
         proposalText.toStdString(),
+        freelancer->getUid(),
         budgetRequest.toStdString()
     );
     

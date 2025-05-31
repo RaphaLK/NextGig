@@ -315,8 +315,6 @@ void FreelancerPortal::setupHiringManagerInfoPanel()
     contentLayout->addWidget(hmCompanyLabel);
     contentLayout->addWidget(new QLabel("About:"));
     contentLayout->addWidget(hmDescriptionLabel);
-    contentLayout->addWidget(new QLabel("Company Description:"));
-    contentLayout->addWidget(hmCompanyDescLabel);
     contentLayout->addStretch();
     
     scrollArea->setWidget(content);
@@ -584,12 +582,26 @@ void FreelancerPortal::onAppliedJobSelected(QListWidgetItem *current, QListWidge
     
     if (!current || current->data(Qt::UserRole).isNull()) {
         clearJobDetails();
+        clearHiringManagerDetails();
         return;
     }
     
     QJsonObject jobObj = current->data(Qt::UserRole).toJsonObject();
     updateJobDetails(jobObj);
-    loadHiringManagerInfo(jobObj["employerUid"].toString());
+
+    qDebug() << Qt::endl << jobObj << Qt::endl;
+    
+    // Get the employer ID - try different field names its either username or user ID
+    QString employerId = jobObj["employerId"].toString();
+    if (employerId.isEmpty()) {
+        employerId = jobObj["uid"].toString();
+    }
+    if (employerId.isEmpty()) {
+        employerId = jobObj["employerUid"].toString();
+    }
+    
+    qDebug() << "Loading hiring manager info for employerId:" << employerId;
+    loadHiringManagerInfo(employerId);
 }
 
 void FreelancerPortal::onApprovedJobSelected(QListWidgetItem *current, QListWidgetItem *previous)
@@ -598,12 +610,57 @@ void FreelancerPortal::onApprovedJobSelected(QListWidgetItem *current, QListWidg
     
     if (!current || current->data(Qt::UserRole).isNull()) {
         clearJobDetails();
+        clearHiringManagerDetails();
         return;
     }
     
     QJsonObject jobObj = current->data(Qt::UserRole).toJsonObject();
     updateJobDetails(jobObj);
-    loadHiringManagerInfo(jobObj["employerUid"].toString());
+    
+    // Get the employer ID - try different field names
+    QString employerId = jobObj["employerId"].toString();
+    if (employerId.isEmpty()) {
+        employerId = jobObj["uid"].toString();
+    }
+    if (employerId.isEmpty()) {
+        employerId = jobObj["employerUid"].toString();
+    }
+    
+    qDebug() << "Loading hiring manager info for employerId:" << employerId;
+    loadHiringManagerInfo(employerId);
+}
+
+void FreelancerPortal::loadHiringManagerInfo(const QString &employerId)
+{
+    if (employerId.isEmpty()) {
+        qDebug() << "Empty employerId provided";
+        clearHiringManagerDetails();
+        return;
+    }
+    
+    qDebug() << "Fetching hiring manager profile for:" << employerId;
+    
+    // Show loading state
+    hmNameLabel->setText("Loading hiring manager details...");
+    hmEmailLabel->setText("");
+    hmCompanyLabel->setText("");
+    hmDescriptionLabel->setText("");
+    hmCompanyDescLabel->setText("");
+    
+    BackendClient::getInstance()->getHiringManagerProfile(employerId,
+        [this, employerId](bool success, const QJsonArray &profileArray) {
+            qDebug() << "Hiring manager profile response - success:" << success << "array size:" << profileArray.size();
+            
+            if (!success || profileArray.isEmpty()) {
+                qDebug() << "Failed to get hiring manager profile for:" << employerId;
+                clearHiringManagerDetails();
+                return;
+            }
+            
+            QJsonObject profile = profileArray[0].toObject();
+            qDebug() << "Received hiring manager profile:" << profile;
+            updateHiringManagerDetails(profile);
+        });
 }
 
 void FreelancerPortal::updateJobDetails(const QJsonObject &jobObj)
@@ -623,42 +680,17 @@ void FreelancerPortal::updateJobDetails(const QJsonObject &jobObj)
     jobInfoSkillsLabel->setText(skillsList.isEmpty() ? "No specific skills required" : skillsList.join(" • "));
 }
 
-void FreelancerPortal::loadHiringManagerInfo(const QString &employerUid)
-{
-    if (employerUid.isEmpty()) {
-        clearHiringManagerDetails();
-        return;
-    }
-    
-    BackendClient::getInstance()->getHiringManagerProfile(employerUid,
-        [this](bool success, const QJsonArray &profileArray) {
-            if (!success || profileArray.isEmpty()) {
-                clearHiringManagerDetails();
-                return;
-            }
-            
-            QJsonObject profile = profileArray[0].toObject();
-            updateHiringManagerDetails(profile);
-        });
-}
-
 void FreelancerPortal::updateHiringManagerDetails(const QJsonObject &profile)
 {
-    hmNameLabel->setText(profile["name"].toString());
-    hmEmailLabel->setText("Email: " + profile["email"].toString());
-    hmCompanyLabel->setText("Company: " + profile["companyName"].toString());
-    hmDescriptionLabel->setText(profile["description"].toString());
-    hmCompanyDescLabel->setText(profile["companyDescription"].toString());
-}
-
-void FreelancerPortal::clearJobDetails()
-{
-    jobInfoTitleLabel->setText("Select a job to view details");
-    jobInfoEmployerLabel->setText("");
-    jobInfoPaymentLabel->setText("");
-    jobInfoDateLabel->setText("");
-    jobInfoDescriptionLabel->setText("");
-    jobInfoSkillsLabel->setText("");
+    qDebug() << "Updating hiring manager details with profile:" << profile;
+    
+    QString name = profile["name"].toString();
+    QString email = profile["email"].toString();
+    QString description = profile["description"].toString();
+    
+    hmNameLabel->setText(name.isEmpty() ? "Name not available" : name);
+    hmEmailLabel->setText(email.isEmpty() ? "Email: Not available" : "Email: " + email);
+    hmDescriptionLabel->setText(description.isEmpty() ? "No description available" : description);
 }
 
 void FreelancerPortal::clearHiringManagerDetails()
@@ -667,7 +699,15 @@ void FreelancerPortal::clearHiringManagerDetails()
     hmEmailLabel->setText("");
     hmCompanyLabel->setText("");
     hmDescriptionLabel->setText("");
-    hmCompanyDescLabel->setText("");
+}
+void FreelancerPortal::clearJobDetails()
+{
+    jobInfoTitleLabel->setText("Select a job to view details");
+    jobInfoEmployerLabel->setText("");
+    jobInfoPaymentLabel->setText("");
+    jobInfoDateLabel->setText("");
+    jobInfoDescriptionLabel->setText("");
+    jobInfoSkillsLabel->setText("");
 }
 
 void FreelancerPortal::editProfile()

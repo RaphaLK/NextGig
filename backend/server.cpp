@@ -565,65 +565,137 @@ void Server::processRequest(int clientSocket, const std::string &request)
     }
     else if (requestType == "getProfile")
     {
-        QString uid = jsonRequest["uid"].toString();
+        QString uid = jsonRequest["employerId"].toString();
+        QString username = jsonRequest["employerId"].toString(); // Alternative lookup (for jobs)
 
-        // Get user reference
-        firebase::firestore::DocumentReference userRef = firestore->Collection("users").Document(uid.toStdString());
+        if (uid.isEmpty() && username.isEmpty())
+        {
+            QJsonObject errorResponse;
+            errorResponse["status"] = "error";
+            errorResponse["error"] = "getProfile requires either a uid or username";
+            sendResponse(clientSocket, QJsonDocument(errorResponse).toJson(QJsonDocument::Compact).toStdString());
+            return;
+        }
 
-        // Get the document
-        auto future = userRef.Get();
-        future.OnCompletion([this, clientSocket](const firebase::Future<firebase::firestore::DocumentSnapshot> &future)
-                            {
-                QJsonObject response;
+        qDebug() << "Getting profile for UID:" << uid << "or Username:" << username;
 
-                if (future.error() != firebase::firestore::kErrorOk)
+        // Function to process profile data once found
+        auto processProfile = [this, clientSocket](const firebase::firestore::DocumentSnapshot &snapshot, const QString &identifier)
+        {
+            QJsonObject response;
+
+            if (snapshot.exists())
+            {
+                qDebug() << "Profile found for identifier:" << identifier;
+
+                // Create a success response with all user data
+                response["status"] = "success";
+                response["uid"] = QString::fromStdString(snapshot.id()); // Always return the actual UID
+
+                // Get basic fields
+                auto username = snapshot.Get("username");
+                auto email = snapshot.Get("email");
+                auto description = snapshot.Get("description");
+                auto accountType = snapshot.Get("accountType");
+
+                if (username.is_string())
                 {
-                    response["status"] = "error";
-                    response["error"] = future.error_message();
+                    response["name"] = QString::fromStdString(username.string_value());
                 }
                 else
                 {
-                    firebase::firestore::DocumentSnapshot snapshot = *future.result();
-
-                    if (snapshot.exists())
-                    {
-                        // Create a success response with all user data
-                        response["status"] = "success";
-
-                        // Get basic fields
-                        auto name = snapshot.Get("username");
-                        auto email = snapshot.Get("email");
-                        auto description = snapshot.Get("description");
-
-                        if (name.is_string())
-                            response["name"] = QString::fromStdString(name.string_value());
-                        if (email.is_string())
-                            response["email"] = QString::fromStdString(email.string_value());
-                        if (description.is_string())
-                            response["description"] = QString::fromStdString(description.string_value());
-
-                        // Get company fields for hiring manager
-                        auto companyName = snapshot.Get("companyName");
-                        auto companyDesc = snapshot.Get("companyDescription");
-
-                        if (companyName.is_string())
-                            response["companyName"] = QString::fromStdString(companyName.string_value());
-                        if (companyDesc.is_string())
-                            response["companyDescription"] = QString::fromStdString(companyDesc.string_value());
-
-                        // Get arrays (tags, accomplishments) TODO:
-
-                        // Get job history TODO:                    }
-                    else
-                    {
-                        // response["status"] = "error";
-                        // response["error"] = "Profile not found"; not worth doing this
-                    }
+                    response["name"] = "No Name";
                 }
 
+                if (email.is_string())
+                {
+                    response["email"] = QString::fromStdString(email.string_value());
+                }
+                else
+                {
+                    response["email"] = "No Email";
+                }
+
+                if (description.is_string())
+                {
+                    response["description"] = QString::fromStdString(description.string_value());
+                }
+                else
+                {
+                    response["description"] = "No description available";
+                }
+
+                // Get company fields for hiring manager
+                auto companyName = snapshot.Get("companyName");
+                auto companyDesc = snapshot.Get("companyDescription");
+
+                if (companyName.is_string())
+                {
+                    response["companyName"] = QString::fromStdString(companyName.string_value());
+                }
+                else
+                {
+                    response["companyName"] = "No Company";
+                }
+
+                qDebug() << "Successfully prepared profile response for identifier:" << identifier;
+            }
+            else
+            {
+                qDebug() << "Profile not found for identifier:" << identifier;
+                response["status"] = "error";
+                response["error"] = "Profile not found";
+            }
+
+            QJsonDocument responseDoc(response);
+            sendResponse(clientSocket, responseDoc.toJson(QJsonDocument::Compact).toStdString());
+        };
+
+        // Try UID lookup first if UID is provided
+        if (!uid.isEmpty())
+        {
+            firebase::firestore::DocumentReference userRef = firestore->Collection("users").Document(uid.toStdString());
+
+            auto future = userRef.Get();
+            future.OnCompletion([this, clientSocket, uid, username, processProfile](const firebase::Future<firebase::firestore::DocumentSnapshot> &future)
+                                {
+            if (future.error() != firebase::firestore::kErrorOk)
+            {
+                qDebug() << "Firestore error getting profile for UID:" << uid << "Error:" << future.error_message();
+                
+                // If UID lookup failed and we have a username, try username lookup
+                if (!username.isEmpty()) {
+                    qDebug() << "UID lookup failed, attempting username lookup for:" << username;
+                    searchByUsername(clientSocket, username, processProfile);
+                    return;
+                }
+                
+                // No fallback available, return error
+                QJsonObject response;
+                response["status"] = "error";
+                response["error"] = QString::fromStdString(future.error_message());
                 QJsonDocument responseDoc(response);
                 sendResponse(clientSocket, responseDoc.toJson(QJsonDocument::Compact).toStdString());
-            } });
+                return;
+            }
+            
+            firebase::firestore::DocumentSnapshot snapshot = *future.result();
+            
+            if (!snapshot.exists() && !username.isEmpty()) {
+                // UID document doesn't exist, try username fallback
+                qDebug() << "UID document not found, attempting username lookup for:" << username;
+                searchByUsername(clientSocket, username, processProfile);
+                return;
+            }
+            
+            // Process the result (either found or not found)
+            processProfile(snapshot, uid); });
+        }
+        else
+        {
+            // Only username provided, search by username directly
+            searchByUsername(clientSocket, username, processProfile);
+        }
     }
     else if (requestType == "signout")
     {
@@ -1884,4 +1956,61 @@ void Server::fetchFreelancerDetails(const std::string &freelancerId, std::functi
         freelancerData["skills"] = skillsArray;
         
         callback(freelancerData, true); });
+}
+
+// Add this method to server.cpp:
+void Server::searchByUsername(int clientSocket, const QString& username, 
+                             std::function<void(const firebase::firestore::DocumentSnapshot&, const QString&)> processProfile)
+{
+    qDebug() << "Searching for user by username:" << username;
+    
+    // Query the users collection for documents where username field matches
+    auto usernameQuery = firestore->Collection("users")
+                                  .WhereEqualTo("username", firebase::firestore::FieldValue::String(username.toStdString()));
+    
+    auto future = usernameQuery.Get();
+    future.OnCompletion([this, clientSocket, username, processProfile](const firebase::Future<firebase::firestore::QuerySnapshot> &future)
+                        {
+        if (future.error() != firebase::firestore::kErrorOk)
+        {
+            qDebug() << "Firestore error searching by username:" << username << "Error:" << future.error_message();
+            QJsonObject response;
+            response["status"] = "error";
+            response["error"] = QString::fromStdString(future.error_message());
+            QJsonDocument responseDoc(response);
+            sendResponse(clientSocket, responseDoc.toJson(QJsonDocument::Compact).toStdString());
+            return;
+        }
+        
+        const firebase::firestore::QuerySnapshot* snapshot = future.result();
+        
+        if (snapshot->empty()) {
+            qDebug() << "No user found with username:" << username;
+            QJsonObject response;
+            response["status"] = "error";
+            response["error"] = "Profile not found";
+            QJsonDocument responseDoc(response);
+            sendResponse(clientSocket, responseDoc.toJson(QJsonDocument::Compact).toStdString());
+            return;
+        }
+        
+        if (snapshot->size() > 1) {
+            qWarning() << "Multiple users found with username:" << username << "Using the first one.";
+        }
+        
+        // Get the first matching document
+        auto documents = snapshot->documents();
+        if (!documents.empty()) {
+            const firebase::firestore::DocumentSnapshot& userDoc = documents[0];
+            qDebug() << "Found user by username:" << username << "UID:" << QString::fromStdString(userDoc.id());
+            processProfile(userDoc, username);
+        } else {
+            qDebug() << "No documents in query result for username:" << username;
+            QJsonObject response;
+            response["status"] = "error";
+            response["error"] = "Profile not found";
+            QJsonDocument responseDoc(response);
+            sendResponse(clientSocket, responseDoc.toJson(QJsonDocument::Compact).toStdString());
+        }
+    });
 }

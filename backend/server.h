@@ -43,10 +43,12 @@ private:
     std::mutex clientsMutex;
     std::vector<int> clientSockets;
 
-    // Socket server methods
+    // Socket server methods and helper functions
     void serverLoop();
     void handleClient(int clientSocket);
     void processRequest(int clientSocket, const std::string &request);
     void sendResponse(int clientSocket, const std::string &response);
     void fetchFreelancerDetails(const std::string &freelancerId,std::function<void(const QJsonObject &, bool)> callback);
+    void searchByUsername(int clientSocket, const QString& username, 
+                         std::function<void(const firebase::firestore::DocumentSnapshot&, const QString&)> processProfile);
 };
