@@ -76,10 +76,6 @@ private:
   QLabel *overallStarLabel;
   QLabel *overallRatingLabel;
   QLabel *totalReviewsLabel;
-  QLabel *communicationRatingLabel;
-  QLabel *clarityRatingLabel;
-  QLabel *paymentRatingLabel;
-  QLabel *professionalismRatingLabel;
   QWidget *feedbackContentWidget;
   QVBoxLayout *feedbackContentLayout;
 

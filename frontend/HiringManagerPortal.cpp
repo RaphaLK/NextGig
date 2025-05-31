@@ -1474,7 +1474,6 @@ void HiringManagerPortal::clearHMRatingPanel()
     
     hmCurrentCompletedJob = QJsonObject();
 }
-
 QWidget *HiringManagerPortal::createRatingsTab()
 {
     QWidget *ratingsWidget = new QWidget();
@@ -1485,9 +1484,9 @@ QWidget *HiringManagerPortal::createRatingsTab()
     QVBoxLayout *overallLayout = new QVBoxLayout();
 
     QHBoxLayout *starsLayout = new QHBoxLayout();
-    overallStarLabel = new QLabel("★★★★☆");
+    overallStarLabel = new QLabel("☆☆☆☆☆");
     overallStarLabel->setStyleSheet("font-size: 32px; color: gold;");
-    overallRatingLabel = new QLabel("4.8");
+    overallRatingLabel = new QLabel("N/A");
     overallRatingLabel->setStyleSheet("font-size: 32px; font-weight: bold;");
     starsLayout->addWidget(overallStarLabel);
     starsLayout->addWidget(overallRatingLabel);
@@ -1496,17 +1495,8 @@ QWidget *HiringManagerPortal::createRatingsTab()
     QHBoxLayout *ratingDetailsLayout = new QHBoxLayout();
     QFormLayout *ratingBreakdownForm = new QFormLayout();
     
-    communicationRatingLabel = new QLabel("★★★★★ 5.0");
-    clarityRatingLabel = new QLabel("★★★★☆ 4.7");
-    paymentRatingLabel = new QLabel("★★★★★ 5.0");
-    professionalismRatingLabel = new QLabel("★★★★☆ 4.6");
+    totalReviewsLabel = new QLabel("No reviews yet");
     
-    ratingBreakdownForm->addRow("Communication:", communicationRatingLabel);
-    ratingBreakdownForm->addRow("Clarity of Requirements:", clarityRatingLabel);
-    ratingBreakdownForm->addRow("Payment Promptness:", paymentRatingLabel);
-    ratingBreakdownForm->addRow("Professionalism:", professionalismRatingLabel);
-
-    totalReviewsLabel = new QLabel("Based on 0 reviews");
 
     ratingDetailsLayout->addLayout(ratingBreakdownForm);
     ratingDetailsLayout->addStretch();
@@ -1548,31 +1538,44 @@ QWidget *HiringManagerPortal::createRatingsTab()
     return ratingsWidget;
 }
 
+// Update the loadHiringManagerRatings method to use the correct profile fetching:
 void HiringManagerPortal::loadHiringManagerRatings()
 {
     HiringManager *hiringManager = UserManager::getInstance()->getCurrentHiringManager();
     if (!hiringManager) {
+        qDebug() << "No hiring manager found for loading ratings";
         return;
     }
     
     QString hiringManagerId = QString::fromStdString(hiringManager->getUid());
+    qDebug() << "Loading ratings for hiring manager:" << hiringManagerId;
     
-    // Get the hiring manager's profile to load ratings
-    BackendClient::getInstance()->getHiringManagerProfile(hiringManagerId,
-        [this](bool success, const QJsonArray &profileArray) {
-            if (!success || profileArray.isEmpty()) {
-                updateRatingsDisplay(QJsonArray());
-                return;
+    // Get the hiring manager's profile to load ratings using UID directly
+    QJsonObject request;
+    request["type"] = "getProfile";
+    request["uid"] = hiringManagerId; // Use UID directly instead of employerId
+    
+    BackendClient::getInstance()->sendRequest(request, [this](const QJsonObject &response) {
+        if (response["status"].toString() == "success") {
+            // Extract ratings from the response
+            QJsonArray ratings;
+            if (response.contains("ratings") && response["ratings"].isArray()) {
+                ratings = response["ratings"].toArray();
             }
-            
-            QJsonObject profile = profileArray[0].toObject();
-            QJsonArray ratings = profile["ratings"].toArray();
+            qDebug() << "Received" << ratings.size() << "ratings for hiring manager";
             updateRatingsDisplay(ratings);
-        });
+        } else {
+            qDebug() << "Failed to load hiring manager profile:" << response["error"].toString();
+            updateRatingsDisplay(QJsonArray()); // Show empty state
+        }
+    });
 }
 
+// Update the updateRatingsDisplay method with proper calculation:
 void HiringManagerPortal::updateRatingsDisplay(const QJsonArray &ratings)
 {
+    qDebug() << "Updating ratings display with" << ratings.size() << "ratings";
+    
     // Clear existing feedback content
     QLayoutItem *child;
     while ((child = feedbackContentLayout->takeAt(0)) != nullptr) {
@@ -1590,17 +1593,12 @@ void HiringManagerPortal::updateRatingsDisplay(const QJsonArray &ratings)
         overallStarLabel->setText("☆☆☆☆☆");
         overallRatingLabel->setText("N/A");
         totalReviewsLabel->setText("No reviews yet");
-        
-        // Update breakdown ratings
-        communicationRatingLabel->setText("No ratings");
-        clarityRatingLabel->setText("No ratings");
-        paymentRatingLabel->setText("No ratings");
-        professionalismRatingLabel->setText("No ratings");
+
         
         return;
     }
     
-    // Calculate overall rating
+    // Calculate overall rating properly
     double totalRating = 0.0;
     int ratingCount = ratings.size();
     
@@ -1611,6 +1609,8 @@ void HiringManagerPortal::updateRatingsDisplay(const QJsonArray &ratings)
     
     double averageRating = totalRating / ratingCount;
     
+    qDebug() << "Calculated average rating:" << averageRating << "from" << ratingCount << "ratings";
+    
     // Update overall rating display
     QString stars = generateStarString(averageRating);
     overallStarLabel->setText(stars);
@@ -1619,10 +1619,6 @@ void HiringManagerPortal::updateRatingsDisplay(const QJsonArray &ratings)
     
     // For now, use the same rating for all categories (you could enhance this with category-specific ratings)
     QString categoryRating = QString("%1 %2").arg(stars).arg(QString::number(averageRating, 'f', 1));
-    communicationRatingLabel->setText(categoryRating);
-    clarityRatingLabel->setText(categoryRating);
-    paymentRatingLabel->setText(categoryRating);
-    professionalismRatingLabel->setText(categoryRating);
     
     // Add individual feedback items
     for (const auto &ratingValue : ratings) {
@@ -1633,6 +1629,7 @@ void HiringManagerPortal::updateRatingsDisplay(const QJsonArray &ratings)
     feedbackContentLayout->addStretch();
 }
 
+// Update addFeedbackItem to properly fetch freelancer name:
 void HiringManagerPortal::addFeedbackItem(const QJsonObject &rating)
 {
     QGroupBox *feedbackItem = new QGroupBox();
@@ -1641,25 +1638,32 @@ void HiringManagerPortal::addFeedbackItem(const QJsonObject &rating)
 
     QHBoxLayout *headerLayout = new QHBoxLayout();
     
-    // Get freelancer name (you might want to fetch this from the freelancer's profile)
+    // Get freelancer name using fromUserId
     QString fromUserId = rating["fromUserId"].toString();
-    QLabel *nameLabel = new QLabel("Freelancer"); // Default name
+    QLabel *nameLabel = new QLabel("Loading..."); // Default name
     nameLabel->setStyleSheet("font-weight: bold;");
     
-    // Fetch the actual freelancer name
-    BackendClient::getInstance()->getHiringManagerProfile(fromUserId,
-        [nameLabel](bool success, const QJsonArray &profileArray) {
-            if (success && !profileArray.isEmpty()) {
-                QJsonObject profile = profileArray[0].toObject();
-                QString freelancerName = profile["name"].toString();
+    // Fetch the actual freelancer name using getProfile
+    if (!fromUserId.isEmpty()) {
+        QJsonObject request;
+        request["type"] = "getProfile";
+        request["uid"] = fromUserId; // Use UID for direct lookup
+        
+        BackendClient::getInstance()->sendRequest(request, [nameLabel](const QJsonObject &response) {
+            if (response["status"].toString() == "success") {
+                QString freelancerName = response["name"].toString();
                 if (freelancerName.isEmpty()) {
-                    freelancerName = profile["username"].toString();
+                    freelancerName = response["username"].toString();
                 }
-                if (!freelancerName.isEmpty()) {
-                    nameLabel->setText(freelancerName);
+                if (freelancerName.isEmpty()) {
+                    freelancerName = "Unknown Freelancer";
                 }
+                nameLabel->setText(freelancerName);
+            } else {
+                nameLabel->setText("Unknown Freelancer");
             }
         });
+    }
     
     int ratingValue = rating["rating"].toInt();
     QString starString = generateStarString(ratingValue);
@@ -1948,32 +1952,23 @@ void HiringManagerPortal::loadProposalsForHiringManager()
 
 void HiringManagerPortal::updateProposalStatus(const QString &jobId, const QString &freelancerId, const QString &status)
 {
-    BackendClient *client = BackendClient::getInstance();
-
-    QJsonObject request;
-    request["type"] = "updateJobStatus";
-    request["freelancerId"] = freelancerId;
-    request["jobId"] = jobId;
-    request["status"] = status;
-
-    client->sendRequest(request, [this, status](const QJsonObject &response)
-                        {
-        if (response["status"].toString() == "success") {
-            QString message = status;
-            if (message == "accepted")
-                message = "Proposal accepted successfully!";
-            else
-                message = "Proposal rejected successfully!";
-            QMessageBox::information(this, "Success", message);
+    qDebug() << "Updating proposal status - JobId:" << jobId << "FreelancerId:" << freelancerId << "Status:" << status;
+    
+    BackendClient::getInstance()->respondToProposal(jobId, freelancerId, (status == "accepted"), [this, jobId, freelancerId, status](bool success) {
+        if (success) {
+            qDebug() << "Proposal status updated successfully";
             
-            // If you accepted a proposal, refresh to update other proposals that might need to be rejected
-            if (status == "accepted") {
-                loadProposalsForHiringManager();
-            }
+            // Refresh the proposals list to show updated status
+            QTimer::singleShot(500, this, &HiringManagerPortal::loadProposalsForHiringManager);
+            
+            // Show success message
+            QString message = QString("Proposal %1 successfully!").arg(status);
+            QMessageBox::information(this, "Success", message);
         } else {
-            QMessageBox::warning(this, "Error", 
-                "Failed to update proposal status: " + response["error"].toString());
-        } });
+            qDebug() << "Failed to update proposal status";
+            QMessageBox::warning(this, "Error", QString("Failed to %1 proposal. Please try again.").arg(status == "accepted" ? "accept" : "reject"));
+        }
+    });
 }
 
 // Add to HiringManagerPortal.cpp:
