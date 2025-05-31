@@ -568,14 +568,14 @@ void Server::processRequest(int clientSocket, const std::string &request)
         QString uid = jsonRequest["employerId"].toString();
         QString username = jsonRequest["employerId"].toString(); // Alternative lookup (for jobs)
 
-        if (uid.isEmpty() && username.isEmpty())
-        {
-            QJsonObject errorResponse;
-            errorResponse["status"] = "error";
-            errorResponse["error"] = "getProfile requires either a uid or username";
-            sendResponse(clientSocket, QJsonDocument(errorResponse).toJson(QJsonDocument::Compact).toStdString());
-            return;
-        }
+        // if (uid.isEmpty() && username.isEmpty())
+        // {
+        //     QJsonObject errorResponse;
+        //     errorResponse["status"] = "error";
+        //     errorResponse["error"] = "getProfile requires either a uid or username";
+        //     sendResponse(clientSocket, QJsonDocument(errorResponse).toJson(QJsonDocument::Compact).toStdString());
+        //     return;
+        // }
 
         qDebug() << "Getting profile for UID:" << uid << "or Username:" << username;
 
@@ -1843,6 +1843,7 @@ void Server::processRequest(int clientSocket, const std::string &request)
             }
 
             QJsonDocument doc(response);
+            qDebug() << "getCompletedJobs:" << " " << doc << Qt::endl;
             sendResponse(clientSocket, doc.toJson(QJsonDocument::Compact).toStdString()); });
     }
     else if (requestType == "rateUser")
@@ -1854,32 +1855,96 @@ void Server::processRequest(int clientSocket, const std::string &request)
 
         auto targetRef = firestore->Collection("users").Document(colleague.toStdString());
 
-        firebase::firestore::MapFieldValue ratingEntry = {
+        // First, get the current user document to check for existing ratings
+        targetRef.Get().OnCompletion([this, clientSocket, fromUser, colleague, rating, comment](const firebase::Future<firebase::firestore::DocumentSnapshot> &future)
+                                     {
+        QJsonObject response;
+        
+        if (future.error() != firebase::firestore::kErrorOk) {
+            response["status"] = "error";
+            response["error"] = QString::fromStdString(future.error_message());
+            QJsonDocument doc(response);
+            sendResponse(clientSocket, doc.toJson(QJsonDocument::Compact).toStdString());
+            return;
+        }
+
+        firebase::firestore::DocumentSnapshot snapshot = *future.result();
+        
+        if (!snapshot.exists()) {
+            response["status"] = "error";
+            response["error"] = "User not found";
+            QJsonDocument doc(response);
+            sendResponse(clientSocket, doc.toJson(QJsonDocument::Compact).toStdString());
+            return;
+        }
+
+        // Create a new reference inside the callback to avoid const issues
+        auto updateRef = firestore->Collection("users").Document(colleague.toStdString());
+
+        // Create the new rating entry
+        firebase::firestore::MapFieldValue newRatingEntry = {
             {"fromUserId", firebase::firestore::FieldValue::String(fromUser.toStdString())},
             {"rating", firebase::firestore::FieldValue::Integer(rating)},
             {"comment", firebase::firestore::FieldValue::String(comment.toStdString())},
-            {"timestamp", firebase::firestore::FieldValue::Timestamp(firebase::Timestamp::Now())}};
+            {"timestamp", firebase::firestore::FieldValue::Timestamp(firebase::Timestamp::Now())}
+        };
 
-        targetRef.Update({{"ratings", firebase::firestore::FieldValue::ArrayUnion({firebase::firestore::FieldValue::Map(ratingEntry)})}}).OnCompletion([=](const firebase::Future<void> &f)
-                                                                                                                                                       {
+        // Get existing ratings array
+        auto ratingsField = snapshot.Get("ratings");
+        std::vector<firebase::firestore::FieldValue> updatedRatings;
+        bool foundExistingRating = false;
+
+        if (ratingsField.is_array()) {
+            // Check each existing rating
+            for (const auto& ratingValue : ratingsField.array_value()) {
+                if (ratingValue.is_map()) {
+                    auto ratingMap = ratingValue.map_value();
+                    auto fromUserIdIter = ratingMap.find("fromUserId");
+                    
+                    // Check if this rating is from the same user
+                    if (fromUserIdIter != ratingMap.end() && 
+                        fromUserIdIter->second.is_string() && 
+                        fromUserIdIter->second.string_value() == fromUser.toStdString()) {
+                        
+                        // Found existing rating from this user, replace it with the new one
+                        updatedRatings.push_back(firebase::firestore::FieldValue::Map(newRatingEntry));
+                        foundExistingRating = true;
+                        qDebug() << "Updated existing rating from user:" << fromUser;
+                    } else {
+                        // Keep existing rating from other users
+                        updatedRatings.push_back(ratingValue);
+                    }
+                } else {
+                    // Keep non-map entries as is (shouldn't happen, but for safety)
+                    updatedRatings.push_back(ratingValue);
+                }
+            }
+        }
+
+        // If no existing rating was found, add the new one
+        if (!foundExistingRating) {
+            updatedRatings.push_back(firebase::firestore::FieldValue::Map(newRatingEntry));
+            qDebug() << "Added new rating from user:" << fromUser;
+        }
+
+        // Update the document with the modified ratings array
+        firebase::firestore::MapFieldValue updateData = {
+            {"ratings", firebase::firestore::FieldValue::Array(updatedRatings)}
+        };
+
+        updateRef.Update(updateData).OnCompletion([this, clientSocket, foundExistingRating](const firebase::Future<void> &updateFuture)
+        {
             QJsonObject response;
-            if (f.error() == firebase::firestore::kErrorOk) {
+            if (updateFuture.error() == firebase::firestore::kErrorOk) {
                 response["status"] = "success";
+                response["message"] = foundExistingRating ? "Rating updated successfully" : "Rating added successfully";
             } else {
                 response["status"] = "error";
-                response["error"] = f.error_message();
+                response["error"] = QString::fromStdString(updateFuture.error_message());
             }
             QJsonDocument doc(response);
-            sendResponse(clientSocket, doc.toJson(QJsonDocument::Compact).toStdString()); });
-    }
-    else
-    {
-        QJsonObject response;
-        response["status"] = "error";
-        response["error"] = "Unknown request type: " + requestType;
-
-        QJsonDocument responseDoc(response);
-        sendResponse(clientSocket, responseDoc.toJson(QJsonDocument::Compact).toStdString());
+            sendResponse(clientSocket, doc.toJson(QJsonDocument::Compact).toStdString());
+        }); });
     }
 }
 void Server::sendResponse(int clientSocket, const std::string &response)
@@ -1959,15 +2024,15 @@ void Server::fetchFreelancerDetails(const std::string &freelancerId, std::functi
 }
 
 // Add this method to server.cpp:
-void Server::searchByUsername(int clientSocket, const QString& username, 
-                             std::function<void(const firebase::firestore::DocumentSnapshot&, const QString&)> processProfile)
+void Server::searchByUsername(int clientSocket, const QString &username,
+                              std::function<void(const firebase::firestore::DocumentSnapshot &, const QString &)> processProfile)
 {
     qDebug() << "Searching for user by username:" << username;
-    
+
     // Query the users collection for documents where username field matches
     auto usernameQuery = firestore->Collection("users")
-                                  .WhereEqualTo("username", firebase::firestore::FieldValue::String(username.toStdString()));
-    
+                             .WhereEqualTo("username", firebase::firestore::FieldValue::String(username.toStdString()));
+
     auto future = usernameQuery.Get();
     future.OnCompletion([this, clientSocket, username, processProfile](const firebase::Future<firebase::firestore::QuerySnapshot> &future)
                         {
@@ -2011,6 +2076,5 @@ void Server::searchByUsername(int clientSocket, const QString& username,
             response["error"] = "Profile not found";
             QJsonDocument responseDoc(response);
             sendResponse(clientSocket, responseDoc.toJson(QJsonDocument::Compact).toStdString());
-        }
-    });
+        } });
 }

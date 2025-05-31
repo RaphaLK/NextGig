@@ -80,6 +80,7 @@
     "qlistwidget": "cpp",
     "qhboxlayout": "cpp",
     "qscrollarea": "cpp",
-    "qtimer": "cpp"
+    "qtimer": "cpp",
+    "qbuttongroup": "cpp"
   }
 }

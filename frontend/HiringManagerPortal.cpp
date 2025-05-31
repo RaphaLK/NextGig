@@ -210,7 +210,7 @@ QWidget *HiringManagerPortal::createDashboardTab()
     summaryLayout->addLayout(pendingProposalsLayout);
     summaryLayout->addLayout(completedJobsLayout);
     summaryGroup->setLayout(summaryLayout);
-
+    
     // Split view for proposals
     QHBoxLayout *proposalsLayout = new QHBoxLayout();
 

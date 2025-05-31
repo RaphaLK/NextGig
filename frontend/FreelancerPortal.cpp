@@ -18,8 +18,10 @@
 #include <QFormLayout>
 #include <QJsonObject>
 #include <QJsonArray>
+#include <QButtonGroup>
 
 QDateTime JobFeed::lastRequestTime = QDateTime();
+
 
 
 FreelancerPortal::FreelancerPortal(QWidget *parent)
@@ -43,6 +45,7 @@ FreelancerPortal::FreelancerPortal(QWidget *parent)
     // Load data for current jobs tab
     QTimer::singleShot(500, this, &FreelancerPortal::loadAppliedJobs);
     QTimer::singleShot(1000, this, &FreelancerPortal::loadApprovedJobs);
+    QTimer::singleShot(1500, this, &FreelancerPortal::loadCompletedJobs);
 }
 
 void FreelancerPortal::setupUI()
@@ -64,6 +67,7 @@ void FreelancerPortal::setupUI()
     // Create the three tabs
     setupAvailableJobsTab();
     setupCurrentJobsTab();
+    setupCompletedJobsTab();
     setupProfileTab();
     
     mainLayout->addWidget(tabWidget);
@@ -762,4 +766,512 @@ void FreelancerPortal::refreshAllData()
     loadUserData();
     loadAppliedJobs();
     loadApprovedJobs();
+}
+
+void FreelancerPortal::setupCompletedJobsTab()
+{
+    QWidget *completedJobsWidget = new QWidget();
+    QVBoxLayout *mainLayout = new QVBoxLayout(completedJobsWidget);
+    
+    // Title
+    QLabel *titleLabel = new QLabel("Completed Jobs");
+    titleLabel->setStyleSheet("font-size: 24px; font-weight: bold; color: #2c3e50; margin-bottom: 10px;");
+    mainLayout->addWidget(titleLabel);
+    
+    // Create main splitter for the layout
+    QSplitter *mainSplitter = new QSplitter(Qt::Horizontal);
+    
+    // Left side: Completed jobs list
+    QWidget *leftPanel = new QWidget();
+    QVBoxLayout *leftLayout = new QVBoxLayout(leftPanel);
+    
+    // Completed Jobs section
+    QGroupBox *completedJobsGroup = new QGroupBox("Your Completed Jobs");
+    completedJobsGroup->setStyleSheet("QGroupBox { font-weight: bold; font-size: 14px; }");
+    QVBoxLayout *completedLayout = new QVBoxLayout();
+    
+    completedJobsList = new QListWidget();
+    completedJobsList->setStyleSheet(
+        "QListWidget::item { padding: 8px; border-bottom: 1px solid #e0e0e0; }"
+        "QListWidget::item:selected { background-color: #4a5759; }"
+        "QListWidget::item:hover { background-color: #b0c4b1; }"
+    );
+    completedLayout->addWidget(completedJobsList);
+    completedJobsGroup->setLayout(completedLayout);
+    
+    leftLayout->addWidget(completedJobsGroup);
+    
+    // Right side: Job details and rating panel
+    QWidget *rightPanel = new QWidget();
+    QVBoxLayout *rightLayout = new QVBoxLayout(rightPanel);
+    
+    // Job Information section for completed jobs
+    completedJobInfoGroup = new QGroupBox("Completed Job Information");
+    completedJobInfoGroup->setStyleSheet("QGroupBox { font-weight: bold; font-size: 14px; }");
+    setupCompletedJobInfoPanel();
+    
+    // Hiring Manager Rating section
+    ratingGroup = new QGroupBox("Rate Hiring Manager");
+    ratingGroup->setStyleSheet("QGroupBox { font-weight: bold; font-size: 14px; }");
+    setupRatingPanel();
+    
+    rightLayout->addWidget(completedJobInfoGroup);
+    rightLayout->addWidget(ratingGroup);
+    
+    // Add panels to splitter
+    mainSplitter->addWidget(leftPanel);
+    mainSplitter->addWidget(rightPanel);
+    mainSplitter->setSizes({300, 500});
+    
+    mainLayout->addWidget(mainSplitter);
+    
+    // Connect signals
+    connect(completedJobsList, &QListWidget::currentItemChanged, 
+            this, &FreelancerPortal::onCompletedJobSelected);
+    
+    // Add refresh button
+    QPushButton *refreshButton = new QPushButton("Refresh Completed Jobs");
+    refreshButton->setStyleSheet("background-color: #28a745; color: white; padding: 8px; border-radius: 4px;");
+    connect(refreshButton, &QPushButton::clicked, [this]() {
+        loadCompletedJobs();
+    });
+    mainLayout->addWidget(refreshButton);
+    
+    tabWidget->addTab(completedJobsWidget, "Completed Jobs");
+}
+
+void FreelancerPortal::setupCompletedJobInfoPanel()
+{
+    QVBoxLayout *layout = new QVBoxLayout(completedJobInfoGroup);
+    
+    // Create scroll area
+    QScrollArea *scrollArea = new QScrollArea();
+    scrollArea->setWidgetResizable(true);
+    scrollArea->setFrameShape(QFrame::NoFrame);
+    
+    QWidget *content = new QWidget();
+    QVBoxLayout *contentLayout = new QVBoxLayout(content);
+    
+    // Job details labels for completed jobs
+    completedJobTitleLabel = new QLabel("Select a completed job to view details");
+    completedJobTitleLabel->setStyleSheet("font-weight: bold; font-size: 16px; color: #2c3e50;");
+    completedJobTitleLabel->setWordWrap(true);
+    
+    completedJobEmployerLabel = new QLabel();
+    completedJobEmployerLabel->setStyleSheet("color: #495057; font-size: 14px;");
+    
+    completedJobPaymentLabel = new QLabel();
+    completedJobPaymentLabel->setStyleSheet("color: #28a745; font-size: 14px; font-weight: bold;");
+
+    completedRatingLabel = new QLabel();
+    completedRatingLabel->setStyleSheet("color:rgb(255, 215, 0); font-size: 14px; font-weight: bold;");
+
+    completedJobDateLabel = new QLabel();
+    completedJobDateLabel->setStyleSheet("color: #6c757d; font-size: 12px;");
+    
+    completedJobDescriptionLabel = new QLabel();
+    completedJobDescriptionLabel->setWordWrap(true);
+    completedJobDescriptionLabel->setStyleSheet(
+        "background-color: #f8f9fa; border-radius: 6px; padding: 10px; margin: 5px 0;"
+    );
+    
+    completedJobStatusLabel = new QLabel();
+    completedJobStatusLabel->setStyleSheet("color: #28a745; font-weight: bold; font-size: 14px;");
+    
+    contentLayout->addWidget(completedJobTitleLabel);
+    contentLayout->addWidget(completedJobEmployerLabel);
+    contentLayout->addWidget(completedJobPaymentLabel);
+    contentLayout->addWidget(completedRatingLabel);
+    contentLayout->addWidget(completedJobDateLabel);
+    contentLayout->addWidget(new QLabel("Description:"));
+    contentLayout->addWidget(completedJobDescriptionLabel);
+    contentLayout->addWidget(completedJobStatusLabel);
+    contentLayout->addStretch();
+    
+    scrollArea->setWidget(content);
+    layout->addWidget(scrollArea);
+}
+
+void FreelancerPortal::setupRatingPanel()
+{
+    QVBoxLayout *layout = new QVBoxLayout(ratingGroup);
+    
+    // Hiring manager info
+    ratingHmNameLabel = new QLabel("Select a completed job to rate the hiring manager");
+    ratingHmNameLabel->setStyleSheet("font-weight: bold; font-size: 16px; color: #2c3e50;");
+    layout->addWidget(ratingHmNameLabel);
+    
+    ratingHmEmailLabel = new QLabel();
+    ratingHmEmailLabel->setStyleSheet("color: #495057; font-size: 14px;");
+    layout->addWidget(ratingHmEmailLabel);
+    
+    // Rating section
+    QLabel *ratingLabel = new QLabel("Rate your experience:");
+    ratingLabel->setStyleSheet("font-weight: bold; margin-top: 10px;");
+    layout->addWidget(ratingLabel);
+    
+    // Star rating buttons
+    QHBoxLayout *starsLayout = new QHBoxLayout();
+    ratingButtons = new QButtonGroup(this);
+    
+    for (int i = 1; i <= 5; i++) {
+        QPushButton *starBtn = new QPushButton(QString("★ %1").arg(i));
+        starBtn->setCheckable(true);
+        starBtn->setStyleSheet(
+            "QPushButton { background-color: #f8f9fa; border: 2px solid #dee2e6; "
+            "padding: 8px; border-radius: 4px; font-size: 14px; }"
+            "QPushButton:checked { background-color: #ffc107; border-color: #ffc107; color: white; }"
+            "QPushButton:hover { background-color: #e2e6ea; }"
+        );
+        ratingButtons->addButton(starBtn, i);
+        starsLayout->addWidget(starBtn);
+    }
+    layout->addLayout(starsLayout);
+    
+    // Comment section
+    QLabel *commentLabel = new QLabel("Additional comments (optional):");
+    commentLabel->setStyleSheet("font-weight: bold; margin-top: 10px;");
+    layout->addWidget(commentLabel);
+    
+    ratingCommentEdit = new QTextEdit();
+    ratingCommentEdit->setMaximumHeight(100);
+    ratingCommentEdit->setPlaceholderText("Share your experience working with this hiring manager...");
+    ratingCommentEdit->setStyleSheet("border: 1px solid #dee2e6; border-radius: 4px; padding: 8px;");
+    layout->addWidget(ratingCommentEdit);
+    
+    // Submit rating button
+    submitRatingBtn = new QPushButton("Submit Rating");
+    submitRatingBtn->setStyleSheet(
+        "background-color: #007bff; color: white; padding: 10px 20px; "
+        "font-weight: bold; border-radius: 6px; font-size: 14px;"
+    );
+    submitRatingBtn->setEnabled(false);
+    connect(submitRatingBtn, &QPushButton::clicked, this, &FreelancerPortal::submitRating);
+    layout->addWidget(submitRatingBtn);
+    
+    // Connect rating buttons
+    connect(ratingButtons, QOverload<int>::of(&QButtonGroup::buttonClicked),
+            [this](int rating) {
+                currentRating = rating;
+                submitRatingBtn->setEnabled(rating > 0);
+            });
+    
+    layout->addStretch();
+}
+void FreelancerPortal::loadCompletedJobs()
+{
+    UserManager *userManager = UserManager::getInstance();
+    User *freelancer = userManager->getCurrentUser();
+    
+    if (!freelancer) {
+        return;
+    }
+    
+    QString freelancerId = QString::fromStdString(freelancer->getUid());
+    
+    completedJobsList->clear();
+    completedJobsList->addItem("Loading completed jobs...");
+    
+    BackendClient::getInstance()->getCompletedJobs(freelancerId, false, // false = as freelancer
+        [this](bool success, const QJsonArray &jobs) {
+            completedJobsList->clear();
+            
+            if (!success) {
+                completedJobsList->addItem("Failed to load completed jobs");
+                return;
+            }
+            
+            if (jobs.isEmpty()) {
+                completedJobsList->addItem("No completed jobs found");
+                return;
+            }
+            
+            for (const auto &jobValue : jobs) {
+                QJsonObject jobObj = jobValue.toObject();
+                
+                // Try both possible field names for job title
+                QString jobTitle = jobObj["jobName"].toString();
+                if (jobTitle.isEmpty()) {
+                    jobTitle = jobObj["jobTitle"].toString();
+                }
+                
+                QString hiringManagerId = jobObj["hiringManagerId"].toString();
+                
+                // Get budget - handle both string and number formats
+                QString payment = jobObj["budgetRequested"].toString();
+                if (payment.isEmpty()) {
+                    double budgetValue = jobObj["budgetRequested"].toDouble();
+                    payment = QString::number(budgetValue);
+                }
+                
+                QString displayText = QString("%1\nHiring Manager: %2\nPayment: $%3")
+                                       .arg(jobTitle)
+                                       .arg(hiringManagerId.isEmpty() ? "Unknown" : "Loading...")
+                                       .arg(payment);
+                
+                QListWidgetItem *item = new QListWidgetItem(displayText);
+                item->setData(Qt::UserRole, jobValue);
+                completedJobsList->addItem(item);
+                
+                // Fetch hiring manager name for display
+                if (!hiringManagerId.isEmpty()) {
+                    BackendClient::getInstance()->getHiringManagerProfile(hiringManagerId,
+                        [this, item](bool success, const QJsonArray &profileArray) {
+                            if (success && !profileArray.isEmpty()) {
+                                QJsonObject profile = profileArray[0].toObject();
+                                QString hiringManagerName = profile["name"].toString();
+                                if (hiringManagerName.isEmpty()) {
+                                    hiringManagerName = profile["username"].toString();
+                                }
+                                if (hiringManagerName.isEmpty()) {
+                                    hiringManagerName = "Unknown Manager";
+                                }
+                                
+                                // Update the display text
+                                QJsonObject jobData = item->data(Qt::UserRole).toJsonObject();
+                                QString jobTitle = jobData["jobName"].toString();
+                                if (jobTitle.isEmpty()) {
+                                    jobTitle = jobData["jobTitle"].toString();
+                                }
+                                
+                                QString payment = jobData["budgetRequested"].toString();
+                                if (payment.isEmpty()) {
+                                    double budgetValue = jobData["budgetRequested"].toDouble();
+                                    payment = QString::number(budgetValue);
+                                }
+                                
+                                QString updatedText = QString("%1\nHiring Manager: %2\nPayment: $%3")
+                                                       .arg(jobTitle)
+                                                       .arg(hiringManagerName)
+                                                       .arg(payment);
+                                
+                                item->setText(updatedText);
+                            }
+                        });
+                }
+            }
+        });
+}
+
+void FreelancerPortal::onCompletedJobSelected(QListWidgetItem *current, QListWidgetItem *previous)
+{
+    Q_UNUSED(previous)
+    
+    if (!current || current->data(Qt::UserRole).isNull()) {
+        clearCompletedJobDetails();
+        clearRatingPanel();
+        return;
+    }
+    
+    QJsonObject jobObj = current->data(Qt::UserRole).toJsonObject();
+    updateCompletedJobDetails(jobObj);
+    
+    // Get the hiring manager ID
+    QString hiringManagerId = jobObj["hiringManagerId"].toString();
+    loadHiringManagerForRating(hiringManagerId, jobObj);
+}
+
+// void FreelancerPortal::updateCompletedJobDetails(const QJsonObject &jobObj, const QJsonObject &hiringManagerObj)
+void FreelancerPortal::updateCompletedJobDetails(const QJsonObject &jobObj)
+// {
+//     qDebug() << "FreelancerPortal::updateCompletedJobDetails" << jobObj << Qt::endl;   
+//     completedJobTitleLabel->setText(jobObj["jobName"].toString());
+//     completedJobEmployerLabel->setText("Hiring Manager: " + jobObj["hiringManagerName"].toString());
+//     completedJobPaymentLabel->setText("Payment: $" + jobObj["budgetRequested"].toString());
+//     // completedRatingLabel->setText("Rating: ");
+
+//     completedJobDescriptionLabel->setText(jobObj["jobDescription"].toString());
+//     completedJobStatusLabel->setText("Status: ✓ Completed");
+    
+//     // You might want to add completion date if available
+//     if (jobObj.contains("completedAt")) {
+//         completedJobDateLabel->setText("Completed: " + jobObj["completedAt"].toString());
+//     } else {
+//         completedJobDateLabel->setText("Completion date not available");
+//     }
+// }
+{
+    qDebug() << "FreelancerPortal::updateCompletedJobDetails" << jobObj << Qt::endl;   
+    
+    // Get job title - try both possible field names
+    QString jobTitle = jobObj["jobName"].toString();
+    if (jobTitle.isEmpty()) {
+        jobTitle = jobObj["jobTitle"].toString();
+    }
+    
+    completedJobTitleLabel->setText(jobTitle);
+    
+    // For now, show the hiring manager ID until we fetch the name
+    QString hiringManagerId = jobObj["hiringManagerId"].toString();
+    completedJobEmployerLabel->setText("Hiring Manager: Loading...");
+    
+    // Fix: Use "budgetRequested" (with 'ed') instead of "budgetRequest"
+    QString budget = jobObj["budgetRequested"].toString();
+    if (budget.isEmpty()) {
+        // Fallback to number format
+        double budgetValue = jobObj["budgetRequested"].toDouble();
+        budget = QString::number(budgetValue);
+    }
+    completedJobPaymentLabel->setText("Payment: $" + budget);
+    
+    completedJobDescriptionLabel->setText(jobObj["jobDescription"].toString());
+    completedJobStatusLabel->setText("Status: ✓ Completed");
+    
+    // You might want to add completion date if available
+    if (jobObj.contains("completedAt")) {
+        completedJobDateLabel->setText("Completed: " + jobObj["completedAt"].toString());
+    } else {
+        completedJobDateLabel->setText("Completion date not available");
+    }
+    
+    // Now fetch the hiring manager name
+    if (!hiringManagerId.isEmpty()) {
+        BackendClient::getInstance()->getHiringManagerProfile(hiringManagerId,
+            [this](bool success, const QJsonArray &profileArray) {
+                if (success && !profileArray.isEmpty()) {
+                    QJsonObject profile = profileArray[0].toObject();
+                    QString hiringManagerName = profile["name"].toString();
+                    if (hiringManagerName.isEmpty()) {
+                        hiringManagerName = profile["username"].toString();
+                    }
+                    if (hiringManagerName.isEmpty()) {
+                        hiringManagerName = "Unknown Manager";
+                    }
+                    
+                    // Update the label with the actual name
+                    completedJobEmployerLabel->setText("Hiring Manager: " + hiringManagerName);
+                } else {
+                    completedJobEmployerLabel->setText("Hiring Manager: Unknown");
+                }
+            });
+    }
+}
+
+void FreelancerPortal::loadHiringManagerForRating(const QString &hiringManagerId, const QJsonObject &jobObj)
+{
+    if (hiringManagerId.isEmpty()) {
+        clearRatingPanel();
+        return;
+    }
+    
+    // Store current job data for rating submission
+    currentCompletedJob = jobObj;
+    
+    // Show loading state
+    ratingHmNameLabel->setText("Loading hiring manager details...");
+    ratingHmEmailLabel->setText("");
+    
+    BackendClient::getInstance()->getHiringManagerProfile(hiringManagerId,
+        [this](bool success, const QJsonArray &profileArray) {
+            if (!success || profileArray.isEmpty()) {
+                ratingHmNameLabel->setText("Hiring manager details not available");
+                ratingHmEmailLabel->setText("");
+                return;
+            }
+            
+            QJsonObject profile = profileArray[0].toObject();
+            updateRatingPanelDetails(profile);
+        });
+}
+
+void FreelancerPortal::updateRatingPanelDetails(const QJsonObject &profile)
+{
+    QString name = profile["name"].toString();
+    QString email = profile["email"].toString();
+    
+    ratingHmNameLabel->setText(name.isEmpty() ? "Name not available" : "Rate: " + name);
+    ratingHmEmailLabel->setText(email.isEmpty() ? "" : "Email: " + email);
+    
+    // Reset rating form
+    ratingButtons->setExclusive(false);
+    for (auto button : ratingButtons->buttons()) {
+        button->setChecked(false);
+    }
+    ratingButtons->setExclusive(true);
+    
+    ratingCommentEdit->clear();
+    currentRating = 0;
+    submitRatingBtn->setEnabled(false);
+}
+
+void FreelancerPortal::submitRating()
+{
+    if (currentRating == 0 || currentCompletedJob.isEmpty()) {
+        QMessageBox::warning(this, "Invalid Rating", "Please select a rating before submitting.");
+        return;
+    }
+    
+    UserManager *userManager = UserManager::getInstance();
+    User *freelancer = userManager->getCurrentUser();
+    
+    if (!freelancer) {
+        QMessageBox::warning(this, "Error", "User not found.");
+        return;
+    }
+    
+    QString fromUserId = QString::fromStdString(freelancer->getUid());
+    QString hiringManagerId = currentCompletedJob["hiringManagerId"].toString();
+    QString comment = ratingCommentEdit->toPlainText().trimmed();
+    
+    QMessageBox::StandardButton confirm = QMessageBox::question(
+        this, "Submit Rating",
+        QString("Are you sure you want to submit a %1-star rating for this hiring manager?")
+            .arg(currentRating),
+        QMessageBox::Yes | QMessageBox::No);
+    
+    if (confirm == QMessageBox::Yes) {
+        submitRatingBtn->setEnabled(false);
+        submitRatingBtn->setText("Submitting...");
+        
+        BackendClient::getInstance()->rateUser(fromUserId, hiringManagerId, currentRating, comment,
+            [this](bool success) {
+                submitRatingBtn->setText("Submit Rating");
+                
+                if (success) {
+                    QMessageBox::information(this, "Success", "Rating submitted successfully!");
+                    
+                    // Disable the rating form to prevent duplicate ratings
+                    for (auto button : ratingButtons->buttons()) {
+                        button->setEnabled(false);
+                    }
+                    ratingCommentEdit->setEnabled(false);
+                    submitRatingBtn->setText("Rating Submitted");
+                } else {
+                    QMessageBox::warning(this, "Error", "Failed to submit rating. Please try again.");
+                    submitRatingBtn->setEnabled(true);
+                }
+            });
+    }
+}
+
+void FreelancerPortal::clearCompletedJobDetails()
+{
+    completedJobTitleLabel->setText("Select a completed job to view details");
+    completedJobEmployerLabel->setText("");
+    completedJobPaymentLabel->setText("");
+    completedJobDateLabel->setText("");
+    completedJobDescriptionLabel->setText("");
+    completedJobStatusLabel->setText("");
+}
+
+void FreelancerPortal::clearRatingPanel()
+{
+    ratingHmNameLabel->setText("Select a completed job to rate the hiring manager");
+    ratingHmEmailLabel->setText("");
+    
+    // Reset rating form
+    ratingButtons->setExclusive(false);
+    for (auto button : ratingButtons->buttons()) {
+        button->setChecked(false);
+        button->setEnabled(true);
+    }
+    ratingButtons->setExclusive(true);
+    
+    ratingCommentEdit->clear();
+    ratingCommentEdit->setEnabled(true);
+    currentRating = 0;
+    submitRatingBtn->setEnabled(false);
+    submitRatingBtn->setText("Submit Rating");
+    
+    currentCompletedJob = QJsonObject();
 }
