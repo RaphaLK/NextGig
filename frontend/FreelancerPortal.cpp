@@ -68,10 +68,101 @@ void FreelancerPortal::setupUI()
     setupAvailableJobsTab();
     setupCurrentJobsTab();
     setupCompletedJobsTab();
+    setupRatingsTab(); 
     setupProfileTab();
     
     mainLayout->addWidget(tabWidget);
 }
+
+void FreelancerPortal::updateRatingPanelDetails(const QJsonObject &profile)
+{
+    QString name = profile["name"].toString();
+    QString email = profile["email"].toString();
+    
+    ratingHmNameLabel->setText(name.isEmpty() ? "Name not available" : "Rate: " + name);
+    ratingHmEmailLabel->setText(email.isEmpty() ? "" : "Email: " + email);
+    
+    // Reset rating form
+    ratingButtons->setExclusive(false);
+    for (auto button : ratingButtons->buttons()) {
+        button->setChecked(false);
+        button->setEnabled(true);
+    }
+    ratingButtons->setExclusive(true);
+    
+    ratingCommentEdit->clear();
+    ratingCommentEdit->setEnabled(true);
+    currentRating = 0;
+    submitRatingBtn->setEnabled(false);
+    submitRatingBtn->setText("Submit Rating");
+    
+    // Check for existing rating
+    checkFreelancerExistingRating(QString::fromStdString(currentCompletedJob["hiringManagerId"].toString().toStdString()));
+}
+
+void FreelancerPortal::checkFreelancerExistingRating(const QString &hiringManagerId)
+{
+    UserManager *userManager = UserManager::getInstance();
+    User *freelancer = userManager->getCurrentUser();
+    
+    if (!freelancer) {
+        return;
+    }
+    
+    QString freelancerId = QString::fromStdString(freelancer->getUid());
+    
+    // Get the hiring manager's profile to check existing ratings
+    BackendClient::getInstance()->getHiringManagerProfile(hiringManagerId,
+        [this, freelancerId](bool success, const QJsonArray &profileArray) {
+            if (!success || profileArray.isEmpty()) {
+                return;
+            }
+            
+            QJsonObject profile = profileArray[0].toObject();
+            QJsonArray ratings = profile["ratings"].toArray();
+            
+            // Check if this freelancer has already rated this hiring manager
+            bool hasRated = false;
+            int existingRating = 0;
+            QString existingComment;
+            
+            for (const auto &ratingValue : ratings) {
+                QJsonObject rating = ratingValue.toObject();
+                if (rating["fromUserId"].toString() == freelancerId) {
+                    hasRated = true;
+                    existingRating = rating["rating"].toInt();
+                    existingComment = rating["comment"].toString();
+                    break;
+                }
+            }
+            
+            if (hasRated) {
+                // Pre-fill the form with existing rating
+                QAbstractButton *button = ratingButtons->button(existingRating);
+                if (button) {
+                    button->setChecked(true);
+                    currentRating = existingRating;
+                }
+                ratingCommentEdit->setText(existingComment);
+                submitRatingBtn->setText("Update Rating");
+                submitRatingBtn->setEnabled(true);
+                
+                // Add a note that this is an update
+                QLabel *updateNote = new QLabel("Note: You have already rated this hiring manager. Submitting will update your previous rating.");
+                updateNote->setStyleSheet("color: #6c757d; font-style: italic; margin: 5px 0;");
+                updateNote->setWordWrap(true);
+                
+                // Add the note to the rating group layout
+                QVBoxLayout *layout = qobject_cast<QVBoxLayout*>(ratingGroup->layout());
+                if (layout) {
+                    layout->insertWidget(layout->count() - 1, updateNote); // Insert before the stretch
+                }
+            } else {
+                submitRatingBtn->setText("Submit Rating");
+            }
+        });
+}
+
 
 void FreelancerPortal::setupNavigationBar()
 {
@@ -840,6 +931,237 @@ void FreelancerPortal::setupCompletedJobsTab()
     tabWidget->addTab(completedJobsWidget, "Completed Jobs");
 }
 
+void FreelancerPortal::setupRatingsTab()
+{
+    QWidget *ratingsWidget = new QWidget();
+    QVBoxLayout *ratingsLayout = new QVBoxLayout(ratingsWidget);
+
+    // Title
+    QLabel *titleLabel = new QLabel("My Ratings & Reviews");
+    titleLabel->setStyleSheet("font-size: 24px; font-weight: bold; color: #2c3e50; margin-bottom: 10px;");
+    ratingsLayout->addWidget(titleLabel);
+
+    // Your overall rating
+    QGroupBox *overallGroup = new QGroupBox("Your Overall Rating");
+    overallGroup->setStyleSheet("QGroupBox { font-weight: bold; font-size: 16px; margin: 10px 0; padding: 15px; }");
+    QVBoxLayout *overallLayout = new QVBoxLayout();
+
+    QHBoxLayout *starsLayout = new QHBoxLayout();
+    freelancerOverallStarLabel = new QLabel("☆☆☆☆☆");
+    freelancerOverallStarLabel->setStyleSheet("font-size: 32px; color: gold;");
+    freelancerOverallRatingLabel = new QLabel("N/A");
+    freelancerOverallRatingLabel->setStyleSheet("font-size: 32px; font-weight: bold;");
+    starsLayout->addWidget(freelancerOverallStarLabel);
+    starsLayout->addWidget(freelancerOverallRatingLabel);
+    starsLayout->addStretch();
+
+    QHBoxLayout *ratingDetailsLayout = new QHBoxLayout();
+    QFormLayout *ratingBreakdownForm = new QFormLayout();
+
+    freelancerTotalReviewsLabel = new QLabel("No reviews yet");
+
+    ratingDetailsLayout->addLayout(ratingBreakdownForm);
+    ratingDetailsLayout->addStretch();
+    ratingDetailsLayout->addWidget(freelancerTotalReviewsLabel, 0, Qt::AlignBottom);
+
+    overallLayout->addLayout(starsLayout);
+    overallLayout->addLayout(ratingDetailsLayout);
+    overallGroup->setLayout(overallLayout);
+
+    // Recent feedback from hiring managers
+    QGroupBox *feedbackGroup = new QGroupBox("Recent Feedback from Hiring Managers");
+    feedbackGroup->setStyleSheet("QGroupBox { font-weight: bold; font-size: 16px; margin: 10px 0; padding: 15px; }");
+    QVBoxLayout *feedbackLayout = new QVBoxLayout();
+    
+    // Scroll area for feedback
+    QScrollArea *feedbackScrollArea = new QScrollArea();
+    feedbackScrollArea->setWidgetResizable(true);
+    feedbackScrollArea->setFrameShape(QFrame::NoFrame);
+    
+    freelancerFeedbackContentWidget = new QWidget();
+    freelancerFeedbackContentLayout = new QVBoxLayout(freelancerFeedbackContentWidget);
+    
+    // Initially show loading message
+    QLabel *loadingLabel = new QLabel("Loading feedback...");
+    loadingLabel->setAlignment(Qt::AlignCenter);
+    loadingLabel->setStyleSheet("color: #6c757d; font-style: italic; padding: 20px;");
+    freelancerFeedbackContentLayout->addWidget(loadingLabel);
+    
+    feedbackScrollArea->setWidget(freelancerFeedbackContentWidget);
+    feedbackLayout->addWidget(feedbackScrollArea);
+    feedbackGroup->setLayout(feedbackLayout);
+
+    // Arrange everything in the ratings tab
+    ratingsLayout->addWidget(overallGroup);
+    ratingsLayout->addWidget(feedbackGroup);
+
+    // Add refresh button
+    QPushButton *refreshRatingsButton = new QPushButton("Refresh Ratings");
+    refreshRatingsButton->setStyleSheet("background-color: #17a2b8; color: white; padding: 8px; border-radius: 4px;");
+    connect(refreshRatingsButton, &QPushButton::clicked, this, &FreelancerPortal::loadFreelancerRatings);
+    ratingsLayout->addWidget(refreshRatingsButton);
+
+    // Load ratings when tab is created
+    QTimer::singleShot(500, this, &FreelancerPortal::loadFreelancerRatings);
+
+    tabWidget->addTab(ratingsWidget, "My Ratings");
+}
+
+void FreelancerPortal::loadFreelancerRatings()
+{
+    UserManager *userManager = UserManager::getInstance();
+    User *freelancer = userManager->getCurrentUser();
+    
+    if (!freelancer) {
+        qDebug() << "No freelancer found for loading ratings";
+        return;
+    }
+    
+    QString freelancerId = QString::fromStdString(freelancer->getUid());
+    qDebug() << "Loading ratings for freelancer:" << freelancerId;
+    
+    // Get the freelancer's profile to load ratings using UID directly
+    QJsonObject request;
+    request["type"] = "getProfile";
+    request["uid"] = freelancerId; // Use UID directly
+    
+    BackendClient::getInstance()->sendRequest(request, [this](const QJsonObject &response) {
+        if (response["status"].toString() == "success") {
+            // Extract ratings from the response
+            QJsonArray ratings;
+            if (response.contains("ratings") && response["ratings"].isArray()) {
+                ratings = response["ratings"].toArray();
+            }
+            qDebug() << "Received" << ratings.size() << "ratings for freelancer";
+            updateFreelancerRatingsDisplay(ratings);
+        } else {
+            qDebug() << "Failed to load freelancer profile:" << response["error"].toString();
+            updateFreelancerRatingsDisplay(QJsonArray()); // Show empty state
+        }
+    });
+}
+
+void FreelancerPortal::updateFreelancerRatingsDisplay(const QJsonArray &ratings)
+{
+    qDebug() << "Updating freelancer ratings display with" << ratings.size() << "ratings";
+    
+    // Clear existing feedback content
+    QLayoutItem *child;
+    while ((child = freelancerFeedbackContentLayout->takeAt(0)) != nullptr) {
+        delete child->widget();
+        delete child;
+    }
+    
+    if (ratings.isEmpty()) {
+        QLabel *noRatingsLabel = new QLabel("No ratings received yet.");
+        noRatingsLabel->setAlignment(Qt::AlignCenter);
+        noRatingsLabel->setStyleSheet("color: #6c757d; font-style: italic; padding: 20px;");
+        freelancerFeedbackContentLayout->addWidget(noRatingsLabel);
+
+        freelancerTotalReviewsLabel->setText("No reviews yet");
+        
+        return;
+    }
+    
+    // Calculate overall rating properly
+    double totalRating = 0.0;
+    int ratingCount = ratings.size();
+    
+    for (const auto &ratingValue : ratings) {
+        QJsonObject rating = ratingValue.toObject();
+        totalRating += rating["rating"].toInt();
+    }
+    
+    double averageRating = totalRating / ratingCount;
+    
+    qDebug() << "Calculated average rating:" << averageRating << "from" << ratingCount << "ratings";
+    
+    // Update overall rating display
+    QString stars = generateFreelancerStarString(averageRating);
+    freelancerOverallStarLabel->setText(stars);
+    freelancerOverallRatingLabel->setText(QString::number(averageRating, 'f', 1));
+    freelancerTotalReviewsLabel->setText(QString("Based on %1 review%2").arg(ratingCount).arg(ratingCount == 1 ? "" : "s"));
+    
+    
+    // Add individual feedback items
+    for (const auto &ratingValue : ratings) {
+        QJsonObject rating = ratingValue.toObject();
+        addFreelancerFeedbackItem(rating);
+    }
+    
+    freelancerFeedbackContentLayout->addStretch();
+}
+
+void FreelancerPortal::addFreelancerFeedbackItem(const QJsonObject &rating)
+{
+    QGroupBox *feedbackItem = new QGroupBox();
+    feedbackItem->setStyleSheet("QGroupBox { border: 1px solid #dee2e6; border-radius: 6px; margin: 5px 0; padding-top: 10px; }");
+    QVBoxLayout *itemLayout = new QVBoxLayout();
+
+    QHBoxLayout *headerLayout = new QHBoxLayout();
+    
+    // Get hiring manager name using fromUserId
+    QString fromUserId = rating["fromUserId"].toString();
+    QLabel *nameLabel = new QLabel("Loading..."); // Default name
+    nameLabel->setStyleSheet("font-weight: bold;");
+    
+    // Fetch the actual hiring manager name using getProfile
+    if (!fromUserId.isEmpty()) {
+        QJsonObject request;
+        request["type"] = "getProfile";
+        request["uid"] = fromUserId; // Use UID for direct lookup
+        
+        BackendClient::getInstance()->sendRequest(request, [nameLabel](const QJsonObject &response) {
+            if (response["status"].toString() == "success") {
+                QString hiringManagerName = response["name"].toString();
+                if (hiringManagerName.isEmpty()) {
+                    hiringManagerName = response["username"].toString();
+                }
+                if (hiringManagerName.isEmpty()) {
+                    hiringManagerName = "Unknown Hiring Manager";
+                }
+                nameLabel->setText(hiringManagerName);
+            } else {
+                nameLabel->setText("Unknown Hiring Manager");
+            }
+        });
+    }
+    
+    int ratingValue = rating["rating"].toInt();
+    QString starString = generateFreelancerStarString(ratingValue);
+    QLabel *starLabel = new QLabel(starString);
+    starLabel->setStyleSheet("color: gold; font-size: 16px;");
+    
+    // Add timestamp if available
+    QLabel *timeLabel = new QLabel();
+    if (rating.contains("timestamp")) {
+        timeLabel->setText("Recent");
+        timeLabel->setStyleSheet("color: #6c757d; font-size: 12px;");
+    }
+
+    headerLayout->addWidget(nameLabel);
+    headerLayout->addStretch();
+    headerLayout->addWidget(timeLabel);
+    headerLayout->addWidget(starLabel);
+
+    QString comment = rating["comment"].toString();
+    QLabel *commentLabel = new QLabel();
+    if (!comment.isEmpty()) {
+        commentLabel->setText(comment);
+    } else {
+        commentLabel->setText("No additional comments provided.");
+        commentLabel->setStyleSheet("color: #6c757d; font-style: italic;");
+    }
+    commentLabel->setWordWrap(true);
+    commentLabel->setStyleSheet(commentLabel->styleSheet() + " padding: 5px 0;");
+
+    itemLayout->addLayout(headerLayout);
+    itemLayout->addWidget(commentLabel);
+
+    feedbackItem->setLayout(itemLayout);
+    freelancerFeedbackContentLayout->addWidget(feedbackItem);
+}
+
 void FreelancerPortal::setupCompletedJobInfoPanel()
 {
     QVBoxLayout *layout = new QVBoxLayout(completedJobInfoGroup);
@@ -1174,26 +1496,6 @@ void FreelancerPortal::loadHiringManagerForRating(const QString &hiringManagerId
         });
 }
 
-void FreelancerPortal::updateRatingPanelDetails(const QJsonObject &profile)
-{
-    QString name = profile["name"].toString();
-    QString email = profile["email"].toString();
-    
-    ratingHmNameLabel->setText(name.isEmpty() ? "Name not available" : "Rate: " + name);
-    ratingHmEmailLabel->setText(email.isEmpty() ? "" : "Email: " + email);
-    
-    // Reset rating form
-    ratingButtons->setExclusive(false);
-    for (auto button : ratingButtons->buttons()) {
-        button->setChecked(false);
-    }
-    ratingButtons->setExclusive(true);
-    
-    ratingCommentEdit->clear();
-    currentRating = 0;
-    submitRatingBtn->setEnabled(false);
-}
-
 void FreelancerPortal::submitRating()
 {
     if (currentRating == 0 || currentCompletedJob.isEmpty()) {
@@ -1274,4 +1576,26 @@ void FreelancerPortal::clearRatingPanel()
     submitRatingBtn->setText("Submit Rating");
     
     currentCompletedJob = QJsonObject();
+}
+
+QString FreelancerPortal::generateFreelancerStarString(double rating)
+{
+    QString stars;
+    int fullStars = static_cast<int>(rating);
+    bool hasHalfStar = (rating - fullStars) >= 0.5;
+    
+    for (int i = 0; i < fullStars; i++) {
+        stars += "★";
+    }
+    
+    if (hasHalfStar) {
+        stars += "☆"; // You could use a half-star character if available
+    }
+    
+    int remainingStars = 5 - fullStars - (hasHalfStar ? 1 : 0);
+    for (int i = 0; i < remainingStars; i++) {
+        stars += "☆";
+    }
+    
+    return stars;
 }

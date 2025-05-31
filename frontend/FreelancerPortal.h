@@ -67,6 +67,13 @@ private:
     void clearCompletedJobDetails();
     void clearRatingPanel();
 
+    void setupRatingsTab();
+    void loadFreelancerRatings();
+    void updateFreelancerRatingsDisplay(const QJsonArray &ratings);
+    void addFreelancerFeedbackItem(const QJsonObject &rating);
+    QString generateFreelancerStarString(double rating);
+    void checkFreelancerExistingRating(const QString &hiringManagerId);
+    
     // UI Components
     QTabWidget *tabWidget;
 
@@ -138,6 +145,11 @@ private:
     QTextEdit *ratingCommentEdit;
     QPushButton *submitRatingBtn;
 
+    QLabel *freelancerOverallStarLabel;
+    QLabel *freelancerOverallRatingLabel;
+    QLabel *freelancerTotalReviewsLabel;
+    QWidget *freelancerFeedbackContentWidget;
+    QVBoxLayout *freelancerFeedbackContentLayout;
     // Rating state
     int currentRating = 0;
     QJsonObject currentCompletedJob;
