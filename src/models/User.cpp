@@ -1,7 +1,7 @@
 #include "User.h"
 
 User::~User() {
-    // Cleanup code if needed
+    // Cleanup code if needed -- user manager handles this but we may need to implement this for future reference
 }
 
 void User::setDescription(string description) {

@@ -20,11 +20,11 @@ public:
         QVBoxLayout *mainLayout = new QVBoxLayout(this);
         inputField = new QTextEdit(this);
         inputField->setPlaceholderText("Write your message or cover letter here...");
-        inputField->setMinimumHeight(150); // Makes the box bigger
+        inputField->setMinimumHeight(150);
 
-        budgetField = new QLineEdit(this); // Use QLineEdit instead of QTextEdit
+        budgetField = new QLineEdit(this);
         budgetField->setPlaceholderText("Write proposed budget (e.g. $500) ... ");
-        budgetField->setFixedHeight(30); // Smaller height
+        budgetField->setFixedHeight(30); 
         mainLayout->addWidget(budgetField);
 
         mainLayout->addWidget(inputField);

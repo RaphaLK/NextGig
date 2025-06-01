@@ -14,6 +14,7 @@
 
 class QListWidgetItem;
 
+// this is kinda nasty, but I'm not too concerned the slots kinda makes things a bit clearer
 class FreelancerPortal : public QWidget
 {
     Q_OBJECT
