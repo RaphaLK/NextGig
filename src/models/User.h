@@ -14,6 +14,9 @@ typedef struct experience
 class User
 {
 public:
+/****
+ * TODO: anything but this, but this solves our build issues so...
+ */
     enum UserType
     {
         FREELANCER,

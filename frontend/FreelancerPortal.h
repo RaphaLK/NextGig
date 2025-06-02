@@ -14,6 +14,7 @@
 
 class QListWidgetItem;
 
+// this is kinda nasty, but I'm not too concerned the slots kinda makes things a bit clearer
 class FreelancerPortal : public QWidget
 {
     Q_OBJECT
@@ -74,6 +75,9 @@ private:
     QString generateFreelancerStarString(double rating);
     void checkFreelancerExistingRating(const QString &hiringManagerId);
     
+    /***
+     * FUTURE TODO: maybe move these UI declarations somewhere else?
+     */
     // UI Components
     QTabWidget *tabWidget;
 

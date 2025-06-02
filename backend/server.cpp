@@ -308,7 +308,8 @@ void Server::handleClient(int clientSocket)
             // Add to request buffer
             requestBuffer += buffer;
 
-            // Check for JSON based protocol - first line contains the size of the JSON object
+            // Check for JSON based protocol -- if we made an invalid object, we can see it here
+            // - first line contains the size of the JSON object
             size_t newlinePos = requestBuffer.find('\n');
             while (newlinePos != std::string::npos)
             {
@@ -320,7 +321,6 @@ void Server::handleClient(int clientSocket)
                 {
                     int jsonSize = std::stoi(sizeStr);
 
-                    // Check if we have enough data for the JSON object
                     if (static_cast<int>(requestBuffer.size()) >= jsonSize)
                     {
                         // Extract the JSON data
@@ -332,7 +332,6 @@ void Server::handleClient(int clientSocket)
                     }
                     else
                     {
-                        // Not enough data yet, break the loop and wait for more
                         break;
                     }
                 }
@@ -637,7 +636,6 @@ void Server::processRequest(int clientSocket, const std::string &request)
                         }
                         
                     } else {
-                        // User exists in Auth but not in Firestore
                         response["status"] = "error";
                         response["error"] = "User profile not found";
                     }
@@ -1396,7 +1394,6 @@ void Server::processRequest(int clientSocket, const std::string &request)
         firebase::firestore::DocumentReference jobRef =
             firestore->Collection("jobs").Document(jobId.toStdString());
 
-        // Get the job document first to check if it exists and to get current proposals
         auto getFuture = jobRef.Get();
         getFuture.OnCompletion([this, clientSocket, jobId, proposalDescription, budgetRequest, freelancerUid, jobRef](const firebase::Future<firebase::firestore::DocumentSnapshot> &future)
                                {
@@ -1600,14 +1597,12 @@ void Server::processRequest(int clientSocket, const std::string &request)
                 jobDetails["budgetRequest"] = "Not specified";
             }
 
-            // Get proposal status
             QString status = "pending";
             if (auto st = propMap.find("status"); st != propMap.end() && st->second.is_string()) {
                 status = QString::fromStdString(st->second.string_value());
             }
             jobDetails["status"] = status;
 
-            // Get approved freelancer info
             if (auto af = data.find("approvedFreelancer"); af != data.end() && af->second.is_string()) {
                 jobDetails["approvedFreelancer"] = QString::fromStdString(af->second.string_value());
             } else {
@@ -1624,7 +1619,7 @@ void Server::processRequest(int clientSocket, const std::string &request)
             }
 
             appliedJobs.append(jobDetails);
-            break;  // Done with this job
+            break;  
         }
     }
 
@@ -1738,7 +1733,6 @@ void Server::processRequest(int clientSocket, const std::string &request)
                             fidIt->second.is_string() && 
                             fidIt->second.string_value() == freelancerId.toStdString()) {
                             
-                            // Found this freelancer's proposal, get the budget request
                             auto budgetIt = propMap.find("budgetRequest");
                             if (budgetIt != propMap.end()) {
                                 if (budgetIt->second.is_string()) {
@@ -1760,7 +1754,7 @@ void Server::processRequest(int clientSocket, const std::string &request)
                                 jobDetails["proposalDescription"] = "No proposal description";
                             }
                             
-                            break; // Found the proposal, no need to continue
+                            break;
                         }
                     }
                 }

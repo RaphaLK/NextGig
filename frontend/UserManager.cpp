@@ -65,13 +65,11 @@ void UserManager::setCurrentUser(User *user)
 
 void UserManager::clearCurrentUser()
 {
-  // Add proper null checks before deletion
+  // Add proper null checks before deletion -- we need to redo this, we have some session management issues
   if (currentUser) {
-    // Check if the current user is one of our specialized types
     if (currentUser == currentFreelancer || currentUser == currentHiringManager) {
       delete currentUser;
     } else {
-      // Handle case where we have separate objects
       if (currentFreelancer) {
         delete currentFreelancer;
       }
@@ -119,6 +117,7 @@ bool UserManager::isFreelancer() const
     return false;
   }
 
+  // I really don't like this dynamic cast, but it seems to work
   bool result = dynamic_cast<Freelancer *>(currentUser) != nullptr;
   qDebug() << "UserManager: isFreelancer returned" << result;
   return result;

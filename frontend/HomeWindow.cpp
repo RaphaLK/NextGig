@@ -7,14 +7,36 @@
 #include <QPushButton>
 #include <QVBoxLayout>
 #include <QHBoxLayout>
+#include <QStyleFactory>
+#include <QMessageBox>
+#include <QApplication>
+#include <QPixmap>
 
 HomeWindow::HomeWindow(QWidget *parent) : QWidget(parent)
 {
+    // Set window properties
+    setWindowTitle("NextGig - Find Your Next Opportunity");
+    setMinimumSize(800, 600);
+    
+    // Create stacked widget for navigation
     stack = new QStackedWidget(this);
-
+    
+    // Set up the application style
+    qApp->setStyle(QStyleFactory::create("Fusion"));
+    
+    // Set application-wide stylesheet
+    qApp->setStyleSheet(
+        "QWidget { font-family: Arial, sans-serif; }"
+        "QLabel { color: #2C3E50; }"
+        "QLineEdit, QComboBox { padding: 8px; border: 1px solid #BDC3C7; border-radius: 4px; }"
+        "QLineEdit:focus, QComboBox:focus { border: 1px solid #3498DB; }"
+    );
+    
     setupNavigationStack();
+    
     // Set the stack as the main layout
     QVBoxLayout *mainLayout = new QVBoxLayout(this);
+    mainLayout->setContentsMargins(0, 0, 0, 0);
     mainLayout->addWidget(stack);
     setLayout(mainLayout);
 }
@@ -113,48 +135,103 @@ void HomeWindow::clearFreelancerPortal()
 
 QWidget *HomeWindow::RenderHomePage()
 {
-	QWidget *homePage = new QWidget();
-	QVBoxLayout *layout = new QVBoxLayout(homePage);
-	// Title
-	QLabel *title = new QLabel("NextGig", homePage);
-	QFont titleFont;
-	titleFont.setPointSize(20);
-	titleFont.setBold(true);
-	title->setFont(titleFont);
-	title->setAlignment(Qt::AlignCenter);
-
-	// Subtitle
-	QLabel *subtitle = new QLabel("Find your next opportunity or hire top talent.", homePage);
-	subtitle->setAlignment(Qt::AlignCenter);
-
-	// Buttons
-	QHBoxLayout *buttonLayout = new QHBoxLayout();
-	QPushButton *loginBtn = new QPushButton("Login", homePage);
-	QPushButton *signupBtn = new QPushButton("Sign Up", homePage);
-	QPushButton *helpBtn = new QPushButton("Help", homePage);
-	helpBtn->setMaximumWidth(45);
-
-	buttonLayout->addWidget(loginBtn);
-	buttonLayout->addWidget(signupBtn);
-	buttonLayout->addWidget(helpBtn);
-
-	// Assemble home page
-	layout->addWidget(title);
-	layout->addWidget(subtitle);
-	layout->addSpacing(30);
-	layout->addLayout(buttonLayout);
-	layout->addStretch();
-
-	// Connect buttons to switch pages
-	connect(loginBtn, &QPushButton::clicked, [this]()
-					{
-						stack->setCurrentIndex(1); // Go to login
-					});
-
-	connect(signupBtn, &QPushButton::clicked, [this]()
-					{
-						stack->setCurrentIndex(2); // Go to signup
-					});
-
-	return homePage;
+    QWidget *homePage = new QWidget();
+    QVBoxLayout *layout = new QVBoxLayout(homePage);
+    
+    // Set margins and spacing
+    layout->setContentsMargins(40, 60, 40, 60);
+    layout->setSpacing(15);
+    
+    // Logo and title area
+    QLabel *logo = new QLabel(homePage);
+    logo->setPixmap(QPixmap(":/images/nextgig_logo.png").scaledToWidth(120, Qt::SmoothTransformation));
+    logo->setAlignment(Qt::AlignCenter);
+    
+    // Title with improved styling
+    QLabel *title = new QLabel("NextGig", homePage);
+    QFont titleFont;
+    titleFont.setPointSize(32);
+    titleFont.setBold(true);
+    titleFont.setFamily("Arial"); // Consider a more modern font if available
+    title->setFont(titleFont);
+    title->setAlignment(Qt::AlignCenter);
+    title->setStyleSheet("color: #2C3E50;"); // Dark blue-gray color
+    
+    // Subtitle with improved styling
+    QLabel *subtitle = new QLabel("Find your next opportunity or hire top talent.", homePage);
+    QFont subtitleFont;
+    subtitleFont.setPointSize(14);
+    subtitleFont.setItalic(true);
+    subtitle->setFont(subtitleFont);
+    subtitle->setAlignment(Qt::AlignCenter);
+    subtitle->setStyleSheet("color: #7F8C8D; margin-bottom: 20px;"); // Subtle gray color
+    
+    // Buttons with improved styling
+    QHBoxLayout *buttonLayout = new QHBoxLayout();
+    buttonLayout->setSpacing(15);
+    
+    QPushButton *loginBtn = new QPushButton("Login", homePage);
+    QPushButton *signupBtn = new QPushButton("Sign Up", homePage);
+    QPushButton *helpBtn = new QPushButton("Help", homePage);
+    
+    // Style the buttons
+    QString buttonStyle = "QPushButton {"
+                        "    padding: 10px 30px;"
+                        "    font-size: 14px;"
+                        "    border-radius: 5px;"
+                        "    font-weight: bold;"
+                        "}"
+                        "QPushButton:hover { background-color: #D6EAF8; }";
+    
+    loginBtn->setStyleSheet(buttonStyle + "QPushButton { background-color: #3498DB; color: white; }");
+    signupBtn->setStyleSheet(buttonStyle + "QPushButton { background-color: #2ECC71; color: white; }");
+    helpBtn->setStyleSheet(buttonStyle);
+    helpBtn->setFixedWidth(100);
+    
+    buttonLayout->addWidget(loginBtn);
+    buttonLayout->addWidget(signupBtn);
+    buttonLayout->addWidget(helpBtn);
+    
+    // Add a card-like container for buttons
+    QWidget *buttonContainer = new QWidget(homePage);
+    buttonContainer->setLayout(buttonLayout);
+    buttonContainer->setStyleSheet("background-color: #ECF0F1; border-radius: 10px; padding: 20px;");
+    
+    // Add some features/benefits text
+    QLabel *featuresLabel = new QLabel("• Connect with top employers\n• Showcase your portfolio\n• Find projects that match your skills", homePage);
+    featuresLabel->setAlignment(Qt::AlignCenter);
+    featuresLabel->setStyleSheet("color: #7F8C8D; margin: 20px 0;");
+    
+    // Assemble home page
+    layout->addStretch(1);
+    layout->addWidget(logo);
+    layout->addWidget(title);
+    layout->addWidget(subtitle);
+    layout->addWidget(featuresLabel);
+    layout->addSpacing(20);
+    layout->addWidget(buttonContainer);
+    layout->addStretch(2);
+    
+    // Set background for the entire page
+    homePage->setStyleSheet("QWidget { background-color: #F5F7FA; }");
+    
+    // Connect buttons to switch pages
+    connect(loginBtn, &QPushButton::clicked, [this]() {
+        stack->setCurrentIndex(1); // Go to login
+    });
+    
+    connect(signupBtn, &QPushButton::clicked, [this]() {
+        stack->setCurrentIndex(2); // Go to signup
+    });
+    
+    // Add help button functionality
+    connect(helpBtn, &QPushButton::clicked, [this]() {
+        QMessageBox::information(this, "Help", 
+            "NextGig connects talented freelancers with hiring managers.\n\n"
+            "• Use Sign Up to create a new account\n"
+            "• Use Login if you already have an account\n\n"
+            "For support, contact help@nextgig.com");
+    });
+    
+    return homePage;
 }
