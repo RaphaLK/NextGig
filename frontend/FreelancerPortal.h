@@ -75,6 +75,9 @@ private:
     QString generateFreelancerStarString(double rating);
     void checkFreelancerExistingRating(const QString &hiringManagerId);
     
+    /***
+     * FUTURE TODO: maybe move these UI declarations somewhere else?
+     */
     // UI Components
     QTabWidget *tabWidget;
 
