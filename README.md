@@ -50,12 +50,10 @@ ninja
        ├── windows/x64/     # Windows libraries
        ├── macos/           # macOS libraries
        └── linux/x86_64/    # Linux libraries
-4. The CMakeLists.txt file should handle paths for Firebase SDK binaries
-   ```
+4. The CMakeLists.txt file should handle paths for Firebase SDK binaries (On Linux, at least)
 
 ### RUN STEPS (IMPORTANT)
 Assuming the executables work without compilation needed (since this submission is zipped for a class project):
-- Run the executable using the startBackend.sh and startFrontend.sh on different console instances
+- Run the executable using the startBackend.sh and startFrontend.sh on different console instances (Assuming you successfully built the binaries.
 - Feel free to start either executable first, order doesn't matter as the FrontEnd Client establishes TCP connections to the backend as needed.
 - DO NOT RUN b_startBackend.sh and b_startFrontend without dependencies installed, this builds the project and WILL cause errors.
-- Otherwise, feel free to run b_start***.
