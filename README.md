@@ -1,5 +1,5 @@
 # NextGig
- Job portal that connects freelancers with clients based on job skills and project requirements.
+ Job portal that connects freelancers with clients based on job skills and project requirements. As of 2026, unsure how this will work since the C++ SDK of Firebase has been deprecated.
 
 ## Overview
 The architecture has the following components:
@@ -21,7 +21,7 @@ ninja
 #### Windows
 - **Visual Studio 2019/2022** with C++ development tools, OR
 - **MinGW-w64** with GCC
-- **Ninja** build system (recommended)
+- **Ninja** build system (It's slow otherwise)
 
 #### macOS
 - NOTICE: Unsure about MacOS compatibility.
@@ -53,7 +53,11 @@ ninja
 4. The CMakeLists.txt file should handle paths for Firebase SDK binaries (On Linux, at least)
 
 ### RUN STEPS (IMPORTANT)
-Assuming the executables work without compilation needed (since this submission is zipped for a class project):
+Binaries will run on x86 Linux Machines (Probably).
 - Run the executable using the startBackend.sh and startFrontend.sh on different console instances (Assuming you successfully built the binaries.
-- Feel free to start either executable first, order doesn't matter as the FrontEnd Client establishes TCP connections to the backend as needed.
-- DO NOT RUN b_startBackend.sh and b_startFrontend without dependencies installed, this builds the project and WILL cause errors.
+- Feel free to start either executable first, order doesn't matter as the backend is just an RPC interface. No initial sync is required.
+
+Otherwise, set up and run the b_* files (backend, then frontend) to build and run each binary
+
+### Future Work
+- If I can recall, async requests aren't handled properly via awaits and weak references. Instead, we use runtime checks and literal timers to sync things up. A whole refactor is needed. Additionally, the server.cc file is big piece of garbage due to the way Firebase works alongside C++ and just how it was organized initially.
